@@ -1,96 +1,102 @@
-import os, gensim, logging
 import QAUtils as util
-import searchText as ST
-import countWords as CW
-import phraseParser as PP
-import graphBuilder as GB
-import graphSolver as GS
 import QApreparer as QA
+import learningModels as LM
 
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-os.chdir('C:/Users/Tin Yun/Dropbox/Stanford/CS 221/Final Project/ScienceQA')
 
-print "1. Download compendium based on keywords and save"
-keywords = ST.getKeywords('ck12_list_keyword.txt')
-util.saveData(keywords, 'WikipediaCK12SearchTerms')
-keywords = util.loadData('WikipediaCK12SearchTerms')
-compendium = ST.createCompendium(keywords, startIndex=0)
-util.saveData(compendium, 'WikipediaCK12Compendium')
+##################################################################
+print("1. Load all preliminary data, do basic formatting")
 
-print "2. Obtain Tf-Idf values based on the compendium and save"
-compendium = util.loadData('WikipediaCK12Compendium')
-wordCountByTopic = CW.getWordCountByTopic(compendium)
-wordTopicCounts = CW.getWordTopicCounts(wordCountByTopic)
-tfidfVals = CW.createTfIdfVals(wordCountByTopic, wordTopicCounts)
-util.saveData(tfidfVals, 'WikipediaCK12TfIdfVals')
+# Get questions and answers in format ['id', 'question', 'correctAnswer', 'answerA', ..., 'answerD']
+#  - In case it is validation set, it will return ['id', 'question', 'answerA', ..., 'answerD']
+trainRawQA = QA.extractQA('training_set.tsv')
+valRawQA = QA.extractQA('validation_set.tsv', validationSet=True)
 
-print "3. Get parses for each sentence in the compendium"
-tfidfVals = util.loadData('WikipediaCK12TfIdfVals')
-playCompendium = {}
-playCompendium['Solar System'] = compendium['Solar System']
-parseData = PP.getAllParses(playCompendium, tfidfVals, threshold=2.5)
-util.saveData(parseData, 'playListParses')
+# Convert questions and answers into pairs format ['id', 'option' (e.g. 0-3), 'question', 'answer', label (e.g. True/False)]
+#  - Q-A pairs where the answer is "all of the above" or "none of the above" were removed
+#  - Where "all of the above" or "none of the above" is the right answer, the remaining question-answer pair labels were changed to True or False respectively
+#  - In case it is validation set, then just return pairs format ['id', 'option', 'question', 'answer']
+trainPairedQA = QA.convertToQAPairs(trainRawQA)
+valPairedQA = QA.convertToQAPairs(valRawQA, validationSet=True)
 
-print "4. Train word2vec model for measuring similarity between nodes"
-word2vecTrained = GB.trainWord2Vec('C:/Users/Tin Yun/Dropbox/Stanford/CS 221/Final Project/wikipedia_content_based_on_ck_12_keyword_one_file_per_keyword/')
-word2vecTrained.save('baseline_word2vec')
-word2vecTrained = gensim.models.Word2Vec.load('baseline_word2vec')
-simModel = GB.word2vecSimilarity(word2vecTrained)
 
-print "5. Use the parses and similarity model to create the graph"
-parseData = util.loadData('playListParses')
-parseGraph = GB.ParseGraph(parseData, simModel, targetEdgeNodeRatio=1.5)
-util.saveData(parseGraph, 'playListParseGraph')
+##################################################################
+print("2. Create X variables")
 
-print "6. Given input of question and answer options, solve."
-print " - Similarity (sim) refers to test based on word2vec cosine similarity"
-print " - Jump (jump) refers to test based on shortest path in graph"
-parseGraph = util.loadData('playListParseGraph')
-QAList = QA.extractQA('solarSystemSet.tsv')
+# Create array of one vector per Q-A pair representing average of individual word word2vec vectors in both question and answer
+#  - new implementation just uses spacy vectors
+#  - arrays returned are of the form (m, n) where m is number of data points, n is number of features (300 for word2vec)
+trainX = QA.convertPairsToVectors(trainPairedQA)
+valX = QA.convertPairsToVectors(valPairedQA)
 
-answerIndex = ['A', 'B', 'C', 'D']
+# Create a version of the X array with all entries log-transformed, concatenate it to original X values
+#  - if any negative X entries, add |min(X)| + 1 to each entry before log transform, otherwise just add 1 
+#  - currently inactive because word2vec vector values are already scaled and in a small range, so this is irrelevant
+#  - however leaving this here because in future may be useful specifically if applied for saturated features
+# trainX = QA.concat(trainX, QA.createLog(trainX))
+# valX = QA.concat(valX, QA.createLog(valX))
 
-simResult = 0
-jumpResult = 0
-simRightjumpWrong = 0
-simWrongjumpRight = 0
-bothRight = 0
-bothWrong = 0
 
-for QAline in QAList:
-    question, answers, answerKey = QA.normalizeQA(QAline)
-    simScores = []
-    jumpScores = []
-    sequences = []
-    for answer in answers:
-        score, sequence = GS.graphSearchAlgorithm(question, answer, parseGraph, minNewEdges=1)
-        jumpScores += [score]
-        simScores += [simModel.getCosine(question, answer)]
-        sequences += [[sequence]]
+## === MOSES - INSERT NEW FEATURES HERE === ##
+#  - Create them in form (m,n) where m is number of data points, n is number of features
+#  - Use oldX = QA.concat(oldX, newFeatures) to concatenate with existing X variables
+#  - Remember to do this on both trainX AND valX because we need to be building up valX for final result
 
-    print QAline
-    print "Similarity:", answerIndex[simScores.index(max(simScores))]
-    print "Jump:", answerIndex[jumpScores.index(min(jumpScores))]
-    print sequences
 
-    if answerIndex[simScores.index(max(simScores))] == answerKey:
-        simResult += 1
-        if answerIndex[jumpScores.index(min(jumpScores))] == answerKey:
-            jumpResult += 1
-            bothRight += 1
-        else:
-            simRightjumpWrong += 1
-    else:
-        if answerIndex[jumpScores.index(min(jumpScores))] == answerKey:
-            jumpResult += 1
-            simWrongjumpRight += 1
-        else:
-            bothWrong += 1
+##################################################################
+print("3. Create Y variables")
 
-print "Total", len(QAList)
-print "sim score", simResult
-print "jump score", jumpResult
-print "sim right jump wrong", simRightjumpWrong
-print "sim wrong jump right", simWrongjumpRight
-print "both right", bothRight
-print "both wrong", bothWrong
+# Create one dimensional array of labels (1 if True, 0 if False)
+trainY = QA.extractYVector(trainPairedQA)
+
+
+##################################################################
+print("4. Specify a variety of models we think will be appropriate")
+
+# Store candidates in a dictionary to be passd to a selector in step 5
+#  - key is the name of the candidate
+#  - value is tuple (model, Bool for whether to do X value standardization, Bool for whether to do feature selection)
+#  - X value standardization ensures each feature's mean value is 0, stdev is 1
+#  - Feature selection uses linearSVM + l1 norm on one pass of data, removes features with 0 coefficients
+candidates = {}
+
+# Use logistic regression because most intuitive model for 0-1 classification selection, no assumptions on prior feature data shape
+from sklearn.linear_model import LogisticRegression
+candidates["Logistic regression, C = 1.0"] = (LogisticRegression(class_weight='balanced'), False, False)
+candidates["Logistic regression, X normalization, C = 1.0"] = (LogisticRegression(class_weight='balanced'), True, False)
+candidates["Logistic regression, C = 1.0, feature selection"] = (LogisticRegression(class_weight='balanced'), False, True)
+candidates["Logistic regression, X normalization, C = 1.0, feature selection"] = (LogisticRegression(class_weight='balanced'), True, True)
+
+# Try SVM with linear kernel (performance should be similar to logit regression)
+from sklearn.svm import LinearSVC
+candidates["Linear SVC, C = 1.0"] = (LinearSVC(class_weight='balanced'), False, False)
+candidates["Linear SVC, X normalization, C = 1.0"] = (LinearSVC(class_weight='balanced'), True, False)
+candidates["Linear SVC, C = 1.0, feature selection"] = (LinearSVC(class_weight='balanced'), False, True)
+candidates["Linear SVC, X normalization, C = 1.0, feature selection"] = (LinearSVC(class_weight='balanced'), True, True)
+
+# Try SVM with polynomial kernel order 2 (to capture first-order interactions between features i.e. x_1^2 and x_1x_2)
+#  - Currently disabled because generalization error about as good as linear SVC but takes too long to run.
+#  - but leaving in because in future with more variables added in form of dummy buckets may become useful
+# from sklearn.svm import SVC
+# candidates["SVC w/ polynomial kernel (d=2), C = 1.0"] = (SVC(class_weight='balanced', kernel='poly', degree=2), False, False)
+# candidates["SVC w/ polynomial kernel (d=2), X normalization, C = 1.0"] = (SVC(class_weight='balanced', kernel='poly', degree=2), True, False)
+# candidates["SVC w/ polynomial kernel (d=2), C = 1.0, feature selection"] = (SVC(class_weight='balanced', kernel='poly', degree=2), False, True)
+# candidates["SVC w/ polynomial kernel (d=2), X normalization, C = 1.0, feature selection"] = (SVC(class_weight='balanced', kernel='poly', degree=2), True, True)
+
+
+##################################################################
+print("5. Take best model, apply to validation set, save results as csv")
+
+# Take the list of model candidates, run 5-fold validation on each, return model settings with best generalization error
+#  - 5-fold validation done on actual raw questions, not on Q-A pairs
+#  - parameters returned also of the same tuple form as values in the candidates dictionary
+#  - if "none of the above" is one of options, will check whether all answers are false
+#  - if "all of the above" is one of options, will check whether all answers are true
+#  - otherwise will just return answer amongst four with highest confidence score of being true
+bestModelParams = LM.returnBestModel(trainX, trainY, candidates, trainRawQA, trainPairedQA)
+
+# Take best model settings, train on whole training set, then apply trained model to validation set, get answers
+#  - Answers in the form "[('id1', 'correctAnswer1"), ...]
+validationAnswers = LM.getValidationAnswers(trainX, trainY, valX, valRawQA, valPairedQA, bestModelParams)
+
+# Print to CSV file in desired submission format for Kaggle
+LM.printAnswersToCSV(validationAnswers, 'submission.csv')

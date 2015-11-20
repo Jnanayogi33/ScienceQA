@@ -1,60 +1,59 @@
-#Scrape text from wikipedia and other texts
-
 import wikipedia as wiki
 import re
-import exceptions
 import QAUtils as util
 
-def getKeywords(file):
 
-    keywords = []
-    keyWordFile = open(file).readlines()
-    for line in keyWordFile[1:]:
-        keywords += [line.strip('\n')]
+# Worker function for downloading search terms from wikipedia
+def downloadWikiSearchResults(rawWord):
+    while True:
+        try: terms = wiki.search(rawWord)
+        except: pass
+        break
+    return terms
 
-    termlist = []
-    for i, keyword in enumerate(keywords):
 
-        print "Getting", str(i+1), "/ " + str(len(keywords)) + " search term lists from Wikipedia"
-        tries = 0
-        while True:
-            try: terms = wiki.search(keyword)
-            except: pass
-            break
-        termlist += terms
+# Master function for downloading search terms from wikipedia
+#  - Uses default 20 workers because that is max I have found in China that doesn't get blocked
+#  - takes as input list of keywords, returns list of search terms that API provides
+def getKeywords(rawWords, workerNum = 20):
+    rawList = util.workerPool(rawWords, downloadWikiSearchResults, workerNum)
+    terms = []
+    for term in rawList:
+        terms += term
+    return list(set(terms))
 
-    return list(set(termlist))
 
-def createCompendium(keywords, startIndex = 0):
+# Worker function for downloading entire wikipedia page based on the given keyword
+#  - If problem with query, will announce it, and not return anything
+#  - pooling function will drop the None when returning final results
+def downloadWikiPage(keyword):
 
-    if startIndex == 0: compendium = {}
-    else: compendium = util.loadData('createCompendiumTemp')
+    while True:
+        try:
+            content = wiki.page(keyword)
+            text = content.content
+            title = content.title
+            subtitle = title
+        except: pass
+        break
 
-    for i, keyword in enumerate(keywords[startIndex:]):
-        print "Downloading", str(i+1), "/ " + str(len(keywords)) + " files from Wikipedia"
-
-        tries = 0
-        while True:
-            try:
-                content = wiki.page(keyword)
-                text = content.content.encode('ascii', 'ignore')
-                title = content.title.encode('ascii', 'ignore')
-                subtitle = title
-            except: pass
-            break
-
-        compendium[title] = {}
-        compendium[title][subtitle] = []
-
-        for line in text.split('\n'):
+    try:
+        sections = {}
+        sections[subtitle] = []
+        for line in text.split("\n"):
             if len(line) == 0: continue
-            match = re.match(r'=+ (.+)Edit =+', line)
-            if match != None:
-                subtitle = match.group(1)
-                if subtitle in ['Notes', 'See also', 'References', 'External links']: break
-                compendium[title][subtitle] = []
-            else: compendium[title][subtitle] += [line]
+            match1 = re.match(r'=+ (.+)Edit =+', line)
+            match2 = re.match(r'=+ (.+) =+', line)
+            if match1 != None or match2 != None:
+                if match1 != None: subtitle = match1.group(1)
+                elif match2 != None: subtitle = match2.group(1)
+                if subtitle in ['Notes', 'Sources', 'Footnotes', 'See also', 'References', 'External links']: break
+                sections[subtitle] = []
+            else: sections[subtitle] += [line]
+        return [title, sections]
+    except: 
+        print("Problem with query:", keyword)
+        return None
 
-        util.saveData(compendium, 'createCompendiumTemp')
 
-    return compendium
+# To be built: master function for downloading all relevant wikipedia pages based on noun chunks
