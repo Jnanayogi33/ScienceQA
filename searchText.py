@@ -1,6 +1,6 @@
 import wikipedia as wiki
 import re
-import QAUtils as util
+import QAUtils as utils
 
 
 # Worker function for downloading search terms from wikipedia. 
@@ -11,7 +11,7 @@ def downloadWikiSearchResults(rawWord):
     tries = 0
     while True:
         try: 
-            if tries > 20: break
+            if tries > 100: break
             else: tries += 1
             terms = wiki.search(rawWord)
         except: pass
@@ -30,7 +30,7 @@ def downloadWikiSearchResults(rawWord):
 #  - Uses default 20 workers because that is max I have found in China that doesn't get blocked
 #  - Takes as input list of keywords, returns dictionary mapping original inputs to outputs
 def getKeywords(rawWords, workerNum = 20):
-    rawList = util.workerPool(rawWords, downloadWikiSearchResults, workerNum)
+    rawList = utils.workerPool(rawWords, downloadWikiSearchResults, workerNum)
     terms = {}
     for result in rawList:
         terms[result[0]] = result[1]
@@ -46,7 +46,7 @@ def downloadWikiPage(keyword):
     tries = 0
     while True:
         try:
-            if tries > 20: break
+            if tries > 100: break
             else: tries += 1
             content = wiki.page(keyword)
             text = content.content
@@ -77,7 +77,7 @@ def downloadWikiPage(keyword):
 # Master function for getting wikipedia pages given keywords
 #  - Returns dictionary mapping keywords to their respective pages
 def getPages(keywords, workerNum = 20): 
-    pageList = util.workerPool(keywords, downloadWikiPage, workerNum)
+    pageList = utils.workerPool(keywords, downloadWikiPage, workerNum)
     pages = {}
     for result in pageList:
         pages[result[0]] = result[1]
