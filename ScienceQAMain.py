@@ -8,8 +8,8 @@ print("1. Load all preliminary data, do basic formatting")
 
 # Get questions and answers in format ['id', 'question', 'correctAnswer', 'answerA', ..., 'answerD']
 #  - In case it is validation set, it will return ['id', 'question', 'answerA', ..., 'answerD']
-trainRawQA = extractor.extractQA('training_set.tsv')
-valRawQA = extractor.extractQA('validation_set.tsv', validationSet=True)
+trainRawQA = extractor.extractQA('ScienceQASharedCache/training_set.tsv')
+valRawQA = extractor.extractQA('ScienceQASharedCache/validation_set.tsv', validationSet=True)
 
 # Convert questions and answers into pairs format ['id', 'option' (e.g. 0-3), 'question', 'answer', label (e.g. True/False)]
 #  - Q-A pairs where the answer is "all of the above" or "none of the above" were removed
@@ -28,7 +28,7 @@ valNounChunks = extractor.extractNounChunks(valRawQA, validationSet=True)
 #  - Returns series of dictionaries: noun chunk --> keywords --> page sections --> list of section paragraphs
 #  - Uses default 20 workers because that is max I have found in China that doesn't get blocked. In US can probably set at 100
 wikiCompendium = scraper.getWikipediaCompendium(list(set(trainNounChunks + valNounChunks)), workerNum = 20)
-utils.saveData(wikiCompendium, "wikiCompendium")
+utils.saveData(wikiCompendium, "ScienceQASharedCache/wikiCompendium")
 
 
 ##################################################################
@@ -111,4 +111,4 @@ bestModelParams = modeler.returnBestModel(trainX, trainY, candidates, trainRawQA
 validationAnswers = modeler.getValidationAnswers(trainX, trainY, valX, valRawQA, valPairedQA, bestModelParams)
 
 # Print to CSV file in desired submission format for Kaggle
-modeler.printAnswersToCSV(validationAnswers, 'submission.csv')
+modeler.printAnswersToCSV(validationAnswers, 'ScienceQASharedCache/submission.csv')

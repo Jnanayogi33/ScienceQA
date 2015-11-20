@@ -94,7 +94,7 @@ def getWikipediaCompendium(nounChunks, workerNum = 20):
     keywords = []
     for chunk in chunk2keywords.keys(): keywords += chunk2keywords[chunk]
     keywords = list(set(keywords))
-    utils.save(chunk2keywords, 'WikiChunk2KeyWords')
+    utils.save(chunk2keywords, 'ScienceQASharedCache/WikiChunk2KeyWords')
 
     print("Getting all wikipedia-specific pages")
     keyword2pages = getPages(keywords, workerNum)
