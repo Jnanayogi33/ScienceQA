@@ -7,13 +7,20 @@ import QAUtils as util
 #  - Returns tuple where first is original search word, second is wiki results
 #  - If no results then return None
 def downloadWikiSearchResults(rawWord):
+    
     while True:
         try: terms = wiki.search(rawWord)
         except: pass
         break
-    if terms == []: return None
-    return (rawWord, terms)
-
+    
+    try:
+        if terms == []: 
+            print("No results for noun chunk:", rawWord)
+            return None
+        else: return (rawWord, terms)
+    except:
+        print("Problem with noun chunk query:", rawWord)
+        return None
 
 # Master function for downloading search terms from wikipedia
 #  - Uses default 20 workers because that is max I have found in China that doesn't get blocked
@@ -56,7 +63,7 @@ def downloadWikiPage(keyword):
             else: sections[subtitle] += [line]
         return (keyword, sections)
     except: 
-        print("Problem with query:", keyword)
+        print("Problem with keyword query:", keyword)
         return None
 
 
