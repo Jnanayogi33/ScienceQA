@@ -66,6 +66,18 @@ def extractYVector(pairs):
     return numpy.array([int(line[-1]) for line in pairs])
 
 
+# Extract all relevant nounchunks from the raw question list
+def extractNounChunks(rawQA, validationSet = False):
+    nounChunks = []
+    if validationSet: answerStart = 2
+    else: answerStart = 3
+    for line in rawQA:
+        for chunk in nlp(line[1]).noun_chunks: nounChunks += [chunk.text]
+        for x in range(4):
+            if "all of the above" in line[answerStart+x].lower() or "none of the above" in line[answerStart+x].lower(): continue
+            for chunk in nlp(line[answerStart+x]).noun_chunks: nounChunks += [chunk.text]
+    return list(set(nounChunks))
+
 # Convert each QA pair into a single sentence format for search purposes
 def convertQAPairToSentence(question, answer):
 

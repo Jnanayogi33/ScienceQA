@@ -3,27 +3,31 @@ import re
 import QAUtils as util
 
 
-# Worker function for downloading search terms from wikipedia
+# Worker function for downloading search terms from wikipedia. 
+#  - Returns tuple where first is original search word, second is wiki results
+#  - If no results then return None
 def downloadWikiSearchResults(rawWord):
     while True:
         try: terms = wiki.search(rawWord)
         except: pass
         break
-    return terms
+    if terms == []: return None
+    return (rawWord, terms)
 
 
 # Master function for downloading search terms from wikipedia
 #  - Uses default 20 workers because that is max I have found in China that doesn't get blocked
-#  - takes as input list of keywords, returns list of search terms that API provides
+#  - Takes as input list of keywords, returns dictionary mapping original inputs to outputs
 def getKeywords(rawWords, workerNum = 20):
     rawList = util.workerPool(rawWords, downloadWikiSearchResults, workerNum)
-    terms = []
-    for term in rawList:
-        terms += term
-    return list(set(terms))
+    terms = {}
+    for result in rawList:
+        terms[result[0]] = result[1]
+    return terms
 
 
 # Worker function for downloading entire wikipedia page based on the given keyword
+#  - Returns tuple where first is original search keyword, second is wiki page in dictionary form
 #  - If problem with query, will announce it, and not return anything
 #  - pooling function will drop the None when returning final results
 def downloadWikiPage(keyword):
@@ -50,10 +54,44 @@ def downloadWikiPage(keyword):
                 if subtitle in ['Notes', 'Sources', 'Footnotes', 'See also', 'References', 'External links']: break
                 sections[subtitle] = []
             else: sections[subtitle] += [line]
-        return [title, sections]
+        return (keyword, sections)
     except: 
         print("Problem with query:", keyword)
         return None
 
 
-# To be built: master function for downloading all relevant wikipedia pages based on noun chunks
+# Master function for getting wikipedia pages given keywords
+#  - Returns dictionary mapping keywords to their respective pages
+def getPages(keywords, workerNum = 20): 
+    pageList = util.workerPool(keywords, downloadWikiPage, workerNum)
+    pages = {}
+    for result in pageList:
+        pages[result[0]] = result[1]
+    return pages
+
+
+# Download all wikipedia pages matching given set of noun chunks
+#  - Returns series of dictionaries: noun chunk --> keywords --> page sections --> list of section paragraphs
+#  - Uses default 20 workers because that is max I have found in China that doesn't get blocked. In US can probably set at 100
+def getWikipediaCompendium(nounChunks, workerNum = 20):
+    
+    print("Getting all wikipedia-specific keywords")
+    chunk2keywords = getKeywords(nounChunks, workerNum)
+    keywords = []
+    for chunk in chunk2keywords.keys(): keywords += chunk2keywords[chunk]
+    keywords = list(set(keywords))
+    utils.save(chunk2keywords, 'WikiChunk2KeyWords')
+
+    print("Getting all wikipedia-specific pages")
+    keyword2pages = getPages(keywords, workerNum)
+
+    print("Consolidating wikipedia scraper results")
+    compendium = {}
+    for chunk in chunk2keywords.keys():
+        compendium[chunk] = {}
+        for keyword in chunk2keywords[chunk]:
+            compendium[chunk][keyword] = None
+            if keyword in keyword2pages.keys():
+                compendium[chunk][keyword] = keyword2pages[keyword]
+
+    return compendium

@@ -1,22 +1,34 @@
-import QAUtils as util
-import QApreparer as QA
-import learningModels as LM
-
+import QAUtils as utils
+import QApreparer as extractor
+import learningModels as modeler
+import searchText as scraper
 
 ##################################################################
 print("1. Load all preliminary data, do basic formatting")
 
 # Get questions and answers in format ['id', 'question', 'correctAnswer', 'answerA', ..., 'answerD']
 #  - In case it is validation set, it will return ['id', 'question', 'answerA', ..., 'answerD']
-trainRawQA = QA.extractQA('training_set.tsv')
-valRawQA = QA.extractQA('validation_set.tsv', validationSet=True)
+trainRawQA = extractor.extractQA('training_set.tsv')
+valRawQA = extractor.extractQA('validation_set.tsv', validationSet=True)
 
 # Convert questions and answers into pairs format ['id', 'option' (e.g. 0-3), 'question', 'answer', label (e.g. True/False)]
 #  - Q-A pairs where the answer is "all of the above" or "none of the above" were removed
 #  - Where "all of the above" or "none of the above" is the right answer, the remaining question-answer pair labels were changed to True or False respectively
 #  - In case it is validation set, then just return pairs format ['id', 'option', 'question', 'answer']
-trainPairedQA = QA.convertToQAPairs(trainRawQA)
-valPairedQA = QA.convertToQAPairs(valRawQA, validationSet=True)
+trainPairedQA = extractor.convertToQAPairs(trainRawQA)
+valPairedQA = extractor.convertToQAPairs(valRawQA, validationSet=True)
+
+# Extract all noun chunks in the training and validation set
+#  - implementation uses pool of worker threads to speed up downloading
+#  - spacy implementation for deciding noun chunks
+trainNounChunks = extractor.extractNounChunks(trainRawQA)
+valNounChunks = extractor.extractNounChunks(valRawQA, validationSet=True)
+
+# # Download all wikipedia pages matching given set of noun chunks
+# #  - Returns series of dictionaries: noun chunk --> keywords --> page sections --> list of section paragraphs
+# #  - Uses default 20 workers because that is max I have found in China that doesn't get blocked. In US can probably set at 100
+# wikiCompendium = scraper.getWikipediaCompendium(list(set(trainNounChunks + valNounChunks)), numWorkers=20)
+# utils.saveData(wikiCompendium, "wikiCompendium")
 
 
 ##################################################################
@@ -25,20 +37,20 @@ print("2. Create X variables")
 # Create array of one vector per Q-A pair representing average of individual word word2vec vectors in both question and answer
 #  - new implementation just uses spacy vectors
 #  - arrays returned are of the form (m, n) where m is number of data points, n is number of features (300 for word2vec)
-trainX = QA.convertPairsToVectors(trainPairedQA)
-valX = QA.convertPairsToVectors(valPairedQA)
+trainX = extractor.convertPairsToVectors(trainPairedQA)
+valX = extractor.convertPairsToVectors(valPairedQA)
 
 # Create a version of the X array with all entries log-transformed, concatenate it to original X values
 #  - if any negative X entries, add |min(X)| + 1 to each entry before log transform, otherwise just add 1 
 #  - currently inactive because word2vec vector values are already scaled and in a small range, so this is irrelevant
 #  - however leaving this here because in future may be useful specifically if applied for saturated features
-# trainX = QA.concat(trainX, QA.createLog(trainX))
-# valX = QA.concat(valX, QA.createLog(valX))
+# trainX = extractor.concat(trainX, extractor.createLog(trainX))
+# valX = extractor.concat(valX, extractor.createLog(valX))
 
 
 ## === MOSES - INSERT NEW FEATURES HERE === ##
 #  - Create them in form (m,n) where m is number of data points, n is number of features
-#  - Use oldX = QA.concat(oldX, newFeatures) to concatenate with existing X variables
+#  - Use oldX = extractor.concat(oldX, newFeatures) to concatenate with existing X variables
 #  - Remember to do this on both trainX AND valX because we need to be building up valX for final result
 
 
@@ -46,7 +58,7 @@ valX = QA.convertPairsToVectors(valPairedQA)
 print("3. Create Y variables")
 
 # Create one dimensional array of labels (1 if True, 0 if False)
-trainY = QA.extractYVector(trainPairedQA)
+trainY = extractor.extractYVector(trainPairedQA)
 
 
 ##################################################################
@@ -55,7 +67,7 @@ print("4. Specify a variety of models we think will be appropriate")
 # Store candidates in a dictionary to be passd to a selector in step 5
 #  - key is the name of the candidate
 #  - value is tuple (model, Bool for whether to do X value standardization, Bool for whether to do feature selection)
-#  - X value standardization ensures each feature's mean value is 0, stdev is 1
+#  - X value standardization ensures each feature's mean value is 0, stdev is 1 (SVC is not linear invariant)
 #  - Feature selection uses linearSVM + l1 norm on one pass of data, removes features with 0 coefficients
 candidates = {}
 
@@ -92,11 +104,11 @@ print("5. Take best model, apply to validation set, save results as csv")
 #  - if "none of the above" is one of options, will check whether all answers are false
 #  - if "all of the above" is one of options, will check whether all answers are true
 #  - otherwise will just return answer amongst four with highest confidence score of being true
-bestModelParams = LM.returnBestModel(trainX, trainY, candidates, trainRawQA, trainPairedQA)
+bestModelParams = modeler.returnBestModel(trainX, trainY, candidates, trainRawQA, trainPairedQA)
 
 # Take best model settings, train on whole training set, then apply trained model to validation set, get answers
 #  - Answers in the form "[('id1', 'correctAnswer1"), ...]
-validationAnswers = LM.getValidationAnswers(trainX, trainY, valX, valRawQA, valPairedQA, bestModelParams)
+validationAnswers = modeler.getValidationAnswers(trainX, trainY, valX, valRawQA, valPairedQA, bestModelParams)
 
 # Print to CSV file in desired submission format for Kaggle
-LM.printAnswersToCSV(validationAnswers, 'submission.csv')
+modeler.printAnswersToCSV(validationAnswers, 'submission.csv')
