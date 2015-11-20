@@ -16,6 +16,7 @@ class Worker(Thread):
         self.workFunction = workFunction
     def run(self):
         while True:
+            print(inputQueue.size())
             task = self.inputQueue.get()
             self.outputQueue.put(self.workFunction(task))
             self.inputQueue.task_done()
