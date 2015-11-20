@@ -8,8 +8,12 @@ import QAUtils as util
 #  - If no results then return None
 def downloadWikiSearchResults(rawWord):
     
+    tries = 0
     while True:
-        try: terms = wiki.search(rawWord)
+        try: 
+            if tries > 20: break
+            else: tries += 1
+            terms = wiki.search(rawWord)
         except: pass
         break
     
@@ -39,8 +43,11 @@ def getKeywords(rawWords, workerNum = 20):
 #  - pooling function will drop the None when returning final results
 def downloadWikiPage(keyword):
 
+    tries = 0
     while True:
         try:
+            if tries > 20: break
+            else: tries += 1
             content = wiki.page(keyword)
             text = content.content
             title = content.title
