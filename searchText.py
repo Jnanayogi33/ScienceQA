@@ -11,7 +11,7 @@ def downloadWikiSearchResults(rawWord):
     tries = 0
     while True:
         try: 
-            if tries > 100: break
+            if tries > 30: break
             else: tries += 1
             terms = wiki.search(rawWord)
         except: pass
@@ -46,7 +46,7 @@ def downloadWikiPage(keyword):
     tries = 0
     while True:
         try:
-            if tries > 100: break
+            if tries > 30: break
             else: tries += 1
             content = wiki.page(keyword)
             text = content.content

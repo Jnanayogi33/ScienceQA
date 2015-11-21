@@ -27,7 +27,7 @@ valNounChunks = extractor.extractNounChunks(valRawQA, validationSet=True)
 # Download all wikipedia pages matching given set of noun chunks
 #  - Returns series of dictionaries: noun chunk --> keywords --> page sections --> list of section paragraphs
 #  - Uses default 20 workers because that is max I have found in China that doesn't get blocked. In US can probably set at 100
-wikiCompendium = scraper.getWikipediaCompendium(list(set(trainNounChunks + valNounChunks)), workerNum = 20)
+wikiCompendium = scraper.getWikipediaCompendium(list(set(trainNounChunks + valNounChunks))[:10], workerNum = 20)
 utils.saveData(wikiCompendium, "ScienceQASharedCache/wikiCompendium")
 
 
