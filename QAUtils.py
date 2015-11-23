@@ -18,6 +18,7 @@ class Worker(Thread):
         self.workFunction = workFunction
     def run(self):
         while self.inputQueue.qsize() > 0:
+            print(self.workerID, "-- Tasks left in input queue:", self.inputQueue.qsize())
             task = self.inputQueue.get()
             try:
                 result = self.workFunction(task)
@@ -37,7 +38,7 @@ class Worker(Thread):
 #  - If certain function call fails, expects worker to return None
 #  - Pool will try those that return None iterations times, if still doesn't work, then will place (task, None) in output list
 #  - Refresh one worker every 60 seconds because on larger numbers of tasks eventually most of the threads get stuck somewhere
-def workerPool(inputList, workFunction, numWorkers=20, iterations=3):   
+def workerPool(inputList, workFunction, numWorkers=20, iterations=3, reundancies=False):   
     outputList = []
     for iteration in range(iterations):
         inputQueue = Queue()
@@ -50,18 +51,22 @@ def workerPool(inputList, workFunction, numWorkers=20, iterations=3):
             worker.daemon = True
             workers += [worker]
             worker.start()
-        while inputQueue.qsize() > 0:
-            for i in range(numWorkers):
-                if inputQueue.qsize() == 0: break
-                if workers[i].is_alive():
-                    workers[i].join(30)
-                    workers[i] = Worker(i, inputQueue, outputQueue, workFunction)
-                    workers[i].daemon = True
-                    workers[i].start()
-                    print("Refreshed worker", i)
-                    time.sleep(30)
-        for worker in workers:
-            if worker.is_alive(): worker.join(60)
+        if redundancies != True:
+            inputQueue.join()
+        else:
+            while inputQueue.qsize() > 0:
+                for i in range(numWorkers):
+                    if inputQueue.qsize() == 0: break
+                    if workers[i].is_alive():
+                        workers[i].join(30)
+                        workers[i] = Worker(i, inputQueue, outputQueue, workFunction)
+                        workers[i].daemon = True
+                        workers[i].start()
+                        print("Refreshed worker", i)
+                        time.sleep(30)
+            for worker in workers:
+                print("Joining workers for this round")
+                if worker.is_alive(): worker.join(1)
         print("Worker Pool: Done joining input queue for iteration round", iteration+1)
         while not outputQueue.empty():
             elem = outputQueue.get()

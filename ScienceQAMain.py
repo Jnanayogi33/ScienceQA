@@ -9,8 +9,9 @@ print("0. Set global parameters")
 
 #Set number of workers for threaded processes and number of iterations that a pool will run to make sure all work is done
 #  - Need fewer threads, more iterations in China since API connections unstable and guarded
-poolWorkerNum = 20
+poolWorkerNum = 50
 poolIterations = 3
+redundancies = True
 
 
 ##################################################################

@@ -71,7 +71,7 @@ def getWikipediaCompendium(nounChunks, workerNum = 20, iterations=3):
 
     print("Getting all wikipedia-specific pages")
     folds = 100
-    for i in range(folds):
+    for i in list(range(28,folds)):
         lowSplit = int(i*len(keywords)/folds)
         highSplit = int((i+1)*len(keywords)/folds)
         print("Working on pages", lowSplit, "to", highSplit)
@@ -80,7 +80,7 @@ def getWikipediaCompendium(nounChunks, workerNum = 20, iterations=3):
         time.sleep(60)
 
     return None
-    
+
     # print("Consolidating wikipedia scraper results")
     # compendium = {}
     # for chunk in chunk2keywords.keys():
