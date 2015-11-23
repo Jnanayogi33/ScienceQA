@@ -1,60 +1,86 @@
 #Basic utilities for saving and loading and downloading data, creating pool of workers for distributed tasks
-import pickle, time, re
+import pickle, time, re, sys
 from queue import Queue
+import queue
 from threading import Thread
 
 
 # Takes input from inputQueue, applies work function, puts return into outputQueue
+#  - If any exception caught in process, puts a "None" into outputQueue
+#  - Otherwise puts the tuple (task, result) into outputQueue
 #  - workFunction must have only one input parameter, one output
-#  - Only one process should be adding items into the inputQueue or taking them out of outputQueue
-#  - Centralize resource access to remain thread-safe
 class Worker(Thread):
-    def __init__(self, inputQueue, outputQueue, workFunction):
+    def __init__(self, workerID, inputQueue, outputQueue, workFunction):
         Thread.__init__(self)
+        self.workerID = workerID
         self.inputQueue = inputQueue
         self.outputQueue = outputQueue
         self.workFunction = workFunction
     def run(self):
-        while True:
-            print("Left in input queue:", self.inputQueue.qsize())
+        while self.inputQueue.qsize() > 0:
             task = self.inputQueue.get()
-            self.outputQueue.put(self.workFunction(task))
-            self.inputQueue.task_done()
+            try:
+                result = self.workFunction(task)
+                self.outputQueue.put((task, result))
+                self.inputQueue.task_done()
+            except:
+                e = sys.exc_info()[0]
+                print("Caught exception", e)
+                self.outputQueue.put(None)
+                self.inputQueue.task_done()
+                pass
 
 
 # Creates pool of workers to complete a task
 #  - Each worker uses workFunction to accomplish one task using one item from inputList
-#  - Outputs placed in an outputQueue which is then converted into a list and returned
-#  - Work function should be built so that in case of failure/exception they return "None" or else all processes will be stopped
-#  - Pool will delete the None results and just return properly formatted results
-#  - Does not maintain order of inputs/outputs
-#  - Default of 20 workers because for API downloading that is max in China that doesn't seem to be blocked
-def workerPool(inputList, workFunction, numWorkers=20):
-    inputQueue = Queue()
-    for inputItem in inputList:
-        inputQueue.put(inputItem)
-    outputQueue = Queue()
-    for _ in range(numWorkers):
-        worker = Worker(inputQueue, outputQueue, workFunction)
-        worker.daemon = True
-        worker.start()
-    inputQueue.join()
+#  - Outputs in form (task, result) placed in an outputQueue which is then converted into a list and returned
+#  - If certain function call fails, expects worker to return None
+#  - Pool will try those that return None iterations times, if still doesn't work, then will place (task, None) in output list
+#  - Refresh one worker every 60 seconds because on larger numbers of tasks eventually most of the threads get stuck somewhere
+def workerPool(inputList, workFunction, numWorkers=20, iterations=3):   
     outputList = []
-    lossCount = 0
-    while not outputQueue.empty():
-        elem = outputQueue.get()
-        if elem is not None: outputList += [elem]
-        else: lossCount += 1 
-        outputQueue.task_done()
-    outputQueue.join()
-    print("Worker pool improper function return resulting loss count:", lossCount)
+    for iteration in range(iterations):
+        inputQueue = Queue()
+        for inputItem in inputList:
+            inputQueue.put(inputItem)
+        outputQueue = Queue()
+        workers = []
+        for i in range(numWorkers):
+            worker = Worker(i, inputQueue, outputQueue, workFunction)
+            worker.daemon = True
+            workers += [worker]
+            worker.start()
+        while inputQueue.qsize() > 0:
+            for i in range(numWorkers):
+                if inputQueue.qsize() == 0: break
+                if workers[i].is_alive():
+                    workers[i].join(30)
+                    workers[i] = Worker(i, inputQueue, outputQueue, workFunction)
+                    workers[i].daemon = True
+                    workers[i].start()
+                    print("Refreshed worker", i)
+                    time.sleep(30)
+        for worker in workers:
+            if worker.is_alive(): worker.join(60)
+        print("Worker Pool: Done joining input queue for iteration round", iteration+1)
+        while not outputQueue.empty():
+            elem = outputQueue.get()
+            if elem is not None: 
+                outputList += [elem]
+                inputList.remove(elem[0])
+            outputQueue.task_done()
+        outputQueue.join()
+    for inputItem in inputList:
+        outputList += [(inputItem, None)]
     return outputList
+
 
 # Basic save data function
 def saveData(data, outputDest):
     dataOutput = open(outputDest, 'wb')
     pickle.dump(data, dataOutput)
     dataOutput.close()
+
 
 # Basic load data function
 def loadData(inputSource):
