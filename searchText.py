@@ -71,13 +71,12 @@ def getWikipediaCompendium(nounChunks, workerNum = 20, iterations=3, redundancie
 
     print("Getting all wikipedia-specific pages")
     folds = 100
-    for i in list(range(28,folds)):
+    for i in list(range(38,folds)):
         lowSplit = int(i*len(keywords)/folds)
         highSplit = int((i+1)*len(keywords)/folds)
         print("Working on pages", lowSplit, "to", highSplit)
         keyword2pages = getWikiPages(keywords[lowSplit:highSplit], workerNum, iterations, redundancies)
         utils.saveData(keyword2pages, 'ScienceQASharedCache/WikiKeyword2Pages' + str(i))
-        time.sleep(60)
 
     return None
 

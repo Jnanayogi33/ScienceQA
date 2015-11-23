@@ -64,6 +64,7 @@ def workerPool(inputList, workFunction, numWorkers=20, iterations=3, redundancie
                         workers[i].start()
                         print("Refreshed worker", i)
                         time.sleep(30)
+            time.sleep(30)
             for worker in workers:
                 print("Joining workers for this round")
                 if worker.is_alive(): worker.join(1)
