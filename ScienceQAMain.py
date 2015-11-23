@@ -11,8 +11,7 @@ print("0. Set global parameters")
 #  - Need fewer threads, more iterations in China since API connections unstable and guarded
 poolWorkerNum = 50
 poolIterations = 3
-redundancies = True
-
+poolRedundancies = True
 
 ##################################################################
 print("1. Load all preliminary data, do basic formatting")
@@ -38,7 +37,7 @@ valNounChunks = extractor.extractNounChunks(valRawQA, validationSet=True)
 # Download all wikipedia pages matching given set of noun chunks
 #  - Returns series of dictionaries: noun chunk --> keywords --> page sections --> list of section paragraphs
 #  - Uses default 20 workers because that is max I have found in China that doesn't get blocked. In US can probably set at 100
-wikiCompendium = scraper.getWikipediaCompendium(list(set(trainNounChunks + valNounChunks)), workerNum = poolWorkerNum, iterations=poolIterations)
+wikiCompendium = scraper.getWikipediaCompendium(list(set(trainNounChunks + valNounChunks)), workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
 utils.saveData(wikiCompendium, "ScienceQASharedCache/wikiCompendium")
 
 

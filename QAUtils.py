@@ -38,7 +38,7 @@ class Worker(Thread):
 #  - If certain function call fails, expects worker to return None
 #  - Pool will try those that return None iterations times, if still doesn't work, then will place (task, None) in output list
 #  - Refresh one worker every 60 seconds because on larger numbers of tasks eventually most of the threads get stuck somewhere
-def workerPool(inputList, workFunction, numWorkers=20, iterations=3, reundancies=False):   
+def workerPool(inputList, workFunction, numWorkers=20, iterations=3, redundancies=False):   
     outputList = []
     for iteration in range(iterations):
         inputQueue = Queue()
