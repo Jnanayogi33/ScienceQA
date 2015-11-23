@@ -8,13 +8,13 @@ import searchText as scraper
 print("0. Set global parameters")
 
 #Set number of workers for threaded processes and number of iterations that a pool will run to make sure all work is done
-#  - Need fewer threads, more iterations in China since API connections unstable and guarded
-poolWorkerNum = 50
-poolIterations = 3
-poolRedundancies = True
+#  - Need fewer threads, more iterations, built-in redundancy in China since API connections unstable and guarded
+poolWorkerNum = 100
+poolIterations = 2
+poolRedundancies = False
 
 ##################################################################
-print("1. Load all preliminary data, do basic formatting")
+print("1. Load all preliminary data, do basic formatting, ")
 
 # Get questions and answers in format ['id', 'question', 'correctAnswer', 'answerA', ..., 'answerD']
 #  - In case it is validation set, it will return ['id', 'question', 'answerA', ..., 'answerD']
@@ -35,10 +35,20 @@ trainNounChunks = extractor.extractNounChunks(trainRawQA)
 valNounChunks = extractor.extractNounChunks(valRawQA, validationSet=True)
 
 # Download all wikipedia pages matching given set of noun chunks
-#  - Returns series of dictionaries: noun chunk --> keywords --> page sections --> list of section paragraphs
-#  - Uses default 20 workers because that is max I have found in China that doesn't get blocked. In US can probably set at 100
-wikiCompendium = scraper.getWikipediaCompendium(list(set(trainNounChunks + valNounChunks)), workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
-utils.saveData(wikiCompendium, "ScienceQASharedCache/wikiCompendium")
+#  - Returns two dictionaries: noun chunk --> keywords, and keyword --> page sections --> list of section paragraphs
+#  - Keep separate to minimize memory usage since there would be a lot of redundancy if combined
+# wikiChunk2Keywords, wikiKeyword2Pages = scraper.getWikipediaCompendium(None, \
+#     workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
+# utils.saveData(wikiChunk2Keywords, "ScienceQASharedCache/wikiChunk2Keywords")
+# utils.saveData(wikiKeyword2Pages, "ScienceQASharedCache/wikiKeyword2Pages")
+
+# Download all freebase triples given list of noun chunks
+#  - Returns 2 dictionaries: chunk --> list of mids, and mid --> list of triples
+#  - Triples in format [[name, "Has property " + property, value['text']], mid of third element in triple]
+freebaseChunk2Mids, freebaseMid2Triples = scraper.getFreebaseCompendium(trainNounChunks + valNounChunks, \
+    workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
+utils.saveData(freebaseChunk2Mids, 'ScienceQASharedCache/freebaseChunk2Mids')
+utils.saveData(freebaseMid2Triples, 'ScienceQASharedCache/freebaseMid2Triples')
 
 
 ##################################################################

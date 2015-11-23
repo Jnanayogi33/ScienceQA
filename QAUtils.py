@@ -1,5 +1,5 @@
 #Basic utilities for saving and loading and downloading data, creating pool of workers for distributed tasks
-import pickle, time, re, sys
+import pickle, time, re, sys, os
 from queue import Queue
 import queue
 from threading import Thread
@@ -79,6 +79,51 @@ def workerPool(inputList, workFunction, numWorkers=20, iterations=3, redundancie
     for inputItem in inputList:
         outputList += [(inputItem, None)]
     return outputList
+
+
+# Master function for downloading in chunks, saving progress in case of download failure
+#  - Downloads in chunks of 1000 items at a time
+#  - Saves each chunk into cache, then combines at end
+#  - By default runs one last iteration to see if it can catch ones that returned None, can run more if change default
+#  - Returns results in form of one combined dictionary
+#  - Saves everything to deal with fact that connection breaks are frequent, but after every file done downloading, cleans up cache
+#  - Remember that list(set()) operation DOES NOT MAINTAIN ORDER! So if reload, use previous saved list
+def poolDownloader(inputList, workerFunction, workerNum = 20, iterations=3, redundancies=False, poolRuns = 1):
+    
+    inputList = list(set(inputList))
+    saveData(inputList, 'ScienceQASharedCache/inputList_poolRuns_' + str(poolRuns))
+    # inputList = loadData('ScienceQASharedCache/inputList_poolRuns_' + str(poolRuns))
+
+    folds = max(int(len(inputList)/1000),1)
+    outputs = {}
+    for i in list(range(0, folds)):
+        lowSplit = int(i*len(inputList)/folds)
+        highSplit = int((i+1)*len(inputList)/folds)
+        print("Working on items", lowSplit, "to", highSplit)
+        rawList = workerPool(inputList[lowSplit:highSplit], workerFunction, workerNum, iterations, redundancies)
+        currOutputs = {}
+        for result in rawList: currOutputs[result[0]] = result[1]
+        saveData(currOutputs, 'ScienceQASharedCache/currOutputs_' + str(i) + "_poolRuns_" + str(poolRuns))
+
+    outputDict = {}
+    for i in list(range(folds)):
+        curr = loadData('ScienceQASharedCache/currOutputs_' + str(i) + "_poolRuns_" + str(poolRuns))
+        for key in curr.keys():
+            outputDict[key] = curr[key]
+            if curr[key] != None and key in inputList: 
+                inputList.remove(key)
+
+    if poolRuns > 1:
+        leftOvers = poolDownloader(inputList, workerFunction, workerNum, iterations, redundancies, poolRuns - 1)
+        for key in leftOvers.keys():
+            outputDict[key] = leftOvers[key]
+
+    for i in list(range(folds)):
+        os.remove('ScienceQASharedCache/currOutputs_' + str(i) + "_poolRuns_" + str(poolRuns))
+
+    return outputDict
+
+
 
 
 # Basic save data function
