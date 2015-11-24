@@ -38,7 +38,7 @@ valPairedQA = extractor.convertToQAPairs(valRawQA, validationSet=True)
 # Download all wikipedia pages matching given set of noun chunks
 #  - Returns two dictionaries: noun chunk --> keywords, and keyword --> page sections --> list of section paragraphs
 #  - Keep separate to minimize memory usage since there would be a lot of redundancy if combined
-# wikiChunk2Keywords, wikiKeyword2Pages = scraper.getWikipediaCompendium(None, \
+# wikiChunk2Keywords, wikiKeyword2Pages = scraper.getWikipediaCompendium(trainNounChunks + valNounChunks, \
 #     workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
 wikiChunk2Keywords = utils.loadData("ScienceQASharedCache/WikiChunk2Keywords")
 wikiKeyword2Pages = utils.loadData("ScienceQASharedCache/WikiKeyword2Pages")
@@ -63,10 +63,8 @@ trainX = extractor.basicFormatFeatures(trainPairedQA)
 valX = extractor.basicFormatFeatures(valPairedQA)
 
 # k-beam search top wikipedia text match features (UNDER DEVELOPMENT)
-trainX = extractor.concat(trainX, extractor.getWikiMatchFeatures(trainPairedQA, wikiChunk2Keywords, wikiKeyword2Pages, k=3))
-valX = extractor.concat(valX, extractor.getWikiMatchFeatures(valPairedQA, wikiChunk2Keywords, wikiKeyword2Pages, k=3))
-utils.saveData(trainX, 'ScienceQASharedCache/trainX')
-utils.saveData(trainX, 'ScienceQASharedCache/valX')
+trainX = extractor.concat(trainX, extractor.getWikiMatchFeatures(trainPairedQA, wikiChunk2Keywords, wikiKeyword2Pages, k=5))
+valX = extractor.concat(valX, extractor.getWikiMatchFeatures(valPairedQA, wikiChunk2Keywords, wikiKeyword2Pages, k=5))
 
 
 ## === MOSES - INSERT NEW FEATURES HERE === ##
@@ -94,6 +92,11 @@ print("3. Create Y variables")
 
 # Create one dimensional array of labels (1 if True, 0 if False)
 trainY = extractor.extractYVector(trainPairedQA)
+
+#Saving before we lose anything...
+utils.saveData(trainX, 'ScienceQASharedCache/trainX')
+utils.saveData(trainX, 'ScienceQASharedCache/valX')
+utils.saveData(trainY, 'ScienceQASharedCache/trainY')
 
 
 ##################################################################

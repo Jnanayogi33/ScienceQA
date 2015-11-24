@@ -200,7 +200,7 @@ def convertQAPairToSentence(pair):
 def findClosestWikiMatch(pair, chunk2keys, key2pages, k=5):
 
     targetSentence = nlp(convertQAPairToSentence(pair))
-    print("Finding closest match for", pair[0], targetSentence.text)
+    # print("Finding closest match for", pair[0])
     
     #Pull out the relevant passages
     chunksRaw = [chunk for chunk in nlp(pair[2]).noun_chunks] + [chunk for chunk in nlp(pair[3]).noun_chunks]
@@ -209,7 +209,6 @@ def findClosestWikiMatch(pair, chunk2keys, key2pages, k=5):
     pages = [key2pages[key] for key in keys if key in key2pages.keys() and key is not None]
 
     #Focus on the k pages where most/all of the noun chunks appear
-    print("Choose k pages")
     chunksLemmatized = [chunk.lemma_ for chunk in chunksRaw]
     pageScores = []
     for page in pages:
@@ -222,7 +221,6 @@ def findClosestWikiMatch(pair, chunk2keys, key2pages, k=5):
     topKpages = [pages[pageScores.index(score)] for score in topKpageScores]
 
     #Choose k best passages matching whole target:
-    print("Choose k passages")
     passages = sum([list(page.values()) for page in topKpages if page is not None], [])
     passages = [nlp(" ".join(passage)) for passage in passages if len(passage) is not 0]    
     passageSimScores = [targetSentence.similarity(passage) for passage in passages]
@@ -230,31 +228,30 @@ def findClosestWikiMatch(pair, chunk2keys, key2pages, k=5):
     topKpassages = [passages[passageSimScores.index(score)] for score in topKpassagescores]
 
     #Choose k best sentences matching whole target:
-    print("Choose k sentences")
     targetNumSents = len(list(targetSentence.sents))
     sentences = []
     for passage in topKpassages:
         currSentences = list(passage.sents)
         if targetNumSents >= len(currSentences): 
-            sentences += [currSentences]
+            sentences += [passage]
         for i in range(targetNumSents, len(currSentences)+1):
-            rawSentence = [segment.text for segment in currSentences[i-targetNumSents:i]]
+            rawSentence = [segment.text for segment in currSentences[i-targetNumSents:i] \
+                if (segment.text != '') and (segment.text.isspace() != True)]
             if rawSentence == []: continue
-            print(rawSentence)
             sentences += [nlp(" ".join(rawSentence))]
     sentenceSimScores = [targetSentence.similarity(sentence) for sentence in sentences]
     topKsentencescores = sorted(sentenceSimScores, reverse=True)[:k]
     topKsentences = [sentences[sentenceSimScores.index(score)] for score in topKsentencescores]
 
     #Check levenshtein distance on lemmatized word basis with target sentence
-    print("Check edit distance")
     targetLemmatized = [tok.lemma_ for tok in targetSentence]
     sentsLemmatized = [[tok.lemma_ for tok in sentence] for sentence in topKsentences]
     lemmatizedDistanceScores = [editdistance.eval(targetLemmatized, currSent) for currSent in sentsLemmatized]
     topKdistanceScores = sorted(lemmatizedDistanceScores)[:k]
     topKLemmatizedSents = [sentsLemmatized[lemmatizedDistanceScores.index(score)] for score in topKdistanceScores]
 
-    return [topKpageScores[0], topKpassagescores[0], topKsentencescores[0], topKdistanceScores[0]]
+    print('Results for', pair[0], "--", [float(topKpageScores[0])/len(chunksRaw), topKpassagescores[0], topKsentencescores[0], float(topKdistanceScores[0])/len(targetLemmatized)])
+    return [float(topKpageScores[0])/len(chunksRaw), topKpassagescores[0], topKsentencescores[0], float(topKdistanceScores[0])/len(targetLemmatized)]
 
 
 def getWikiMatchFeatures(pairs, chunk2keys, key2pages, k=5):
