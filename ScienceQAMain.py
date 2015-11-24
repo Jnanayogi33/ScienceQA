@@ -9,9 +9,10 @@ print("0. Set global parameters")
 
 #Set number of workers for threaded processes and number of iterations that a pool will run to make sure all work is done
 #  - Need fewer threads, more iterations, built-in redundancy in China since API connections unstable and guarded
-poolWorkerNum = 100
+poolWorkerNum = 30
 poolIterations = 2
-poolRedundancies = False
+poolRedundancies = True
+
 
 ##################################################################
 print("1. Load all preliminary data, do basic formatting, ")
@@ -31,47 +32,61 @@ valPairedQA = extractor.convertToQAPairs(valRawQA, validationSet=True)
 # Extract all noun chunks in the training and validation set
 #  - implementation uses pool of worker threads to speed up downloading
 #  - spacy implementation for deciding noun chunks
-trainNounChunks = extractor.extractNounChunks(trainRawQA)
-valNounChunks = extractor.extractNounChunks(valRawQA, validationSet=True)
+# trainNounChunks = extractor.extractNounChunks(trainRawQA)
+# valNounChunks = extractor.extractNounChunks(valRawQA, validationSet=True)
 
 # Download all wikipedia pages matching given set of noun chunks
 #  - Returns two dictionaries: noun chunk --> keywords, and keyword --> page sections --> list of section paragraphs
 #  - Keep separate to minimize memory usage since there would be a lot of redundancy if combined
 # wikiChunk2Keywords, wikiKeyword2Pages = scraper.getWikipediaCompendium(None, \
 #     workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
-# utils.saveData(wikiChunk2Keywords, "ScienceQASharedCache/wikiChunk2Keywords")
-# utils.saveData(wikiKeyword2Pages, "ScienceQASharedCache/wikiKeyword2Pages")
+wikiChunk2Keywords = utils.loadData("ScienceQASharedCache/WikiChunk2Keywords")
+wikiKeyword2Pages = utils.loadData("ScienceQASharedCache/WikiKeyword2Pages")
 
 # Download all freebase triples given list of noun chunks
 #  - Returns 2 dictionaries: chunk --> list of mids, and mid --> list of triples
 #  - Triples in format [[name, "Has property " + property, value['text']], mid of third element in triple]
-freebaseChunk2Mids, freebaseMid2Triples = scraper.getFreebaseCompendium(trainNounChunks + valNounChunks, \
-    workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
-utils.saveData(freebaseChunk2Mids, 'ScienceQASharedCache/freebaseChunk2Mids')
-utils.saveData(freebaseMid2Triples, 'ScienceQASharedCache/freebaseMid2Triples')
+# freebaseChunk2Mids, freebaseMid2Triples = scraper.getFreebaseCompendium(trainNounChunks[:500], \
+#     workerNum = poolWorkerNum, iterations=poolIterations, redundancies=poolRedundancies)
+# utils.saveData(freebaseChunk2Mids, 'ScienceQASharedCache/FreebaseChunk2Mids')
+# utils.saveData(freebaseMid2Triples, 'ScienceQASharedCache/FreebaseMid2Triples')
 
 
 ##################################################################
 print("2. Create X variables")
 
-# Create array of one vector per Q-A pair representing average of individual word word2vec vectors in both question and answer
-#  - new implementation just uses spacy vectors
-#  - arrays returned are of the form (m, n) where m is number of data points, n is number of features (300 for word2vec)
-trainX = extractor.convertPairsToVectors(trainPairedQA)
-valX = extractor.convertPairsToVectors(valPairedQA)
+# Create one vector per Q-A pair representing basic features regarding format of question and answer:
+#  - Number sentences, whether answer is full sentence, fill in the blank types
+#  - Correlation between question and answer
+#  - Existence of different question words, other words indicating right answer approach
+trainX = extractor.basicFormatFeatures(trainPairedQA)
+valX = extractor.basicFormatFeatures(valPairedQA)
 
-# Create a version of the X array with all entries log-transformed, concatenate it to original X values
-#  - if any negative X entries, add |min(X)| + 1 to each entry before log transform, otherwise just add 1 
-#  - currently inactive because word2vec vector values are already scaled and in a small range, so this is irrelevant
-#  - however leaving this here because in future may be useful specifically if applied for saturated features
-# trainX = extractor.concat(trainX, extractor.createLog(trainX))
-# valX = extractor.concat(valX, extractor.createLog(valX))
+# k-beam search top wikipedia text match features (UNDER DEVELOPMENT)
+trainX = extractor.concat(trainX, extractor.getWikiMatchFeatures(trainPairedQA, wikiChunk2Keywords, wikiKeyword2Pages, k=3))
+valX = extractor.concat(valX, extractor.getWikiMatchFeatures(valPairedQA, wikiChunk2Keywords, wikiKeyword2Pages, k=3))
+utils.saveData(trainX, 'ScienceQASharedCache/trainX')
+utils.saveData(trainX, 'ScienceQASharedCache/valX')
 
 
 ## === MOSES - INSERT NEW FEATURES HERE === ##
 #  - Create them in form (m,n) where m is number of data points, n is number of features
 #  - Use oldX = extractor.concat(oldX, newFeatures) to concatenate with existing X variables
 #  - Remember to do this on both trainX AND valX because we need to be building up valX for final result
+
+
+# Append first order interaction terms of form x_1 * x_2
+#  - Note will generate order n^2 features, so do this only for most critical features
+from sklearn.preprocessing import PolynomialFeatures
+poly = PolynomialFeatures(interaction_only=True)
+trainX = poly.fit_transform(trainX)
+valX = poly.fit_transform(valX)
+
+# Attach array of one vector per Q-A pair representing average of individual word word2vec vectors in both question and answer
+#  - new implementation just uses spacy vectors
+#  - arrays returned are of the form (m, n) where m is number of data points, n is number of features (300 for word2vec)
+trainX = extractor.concat(trainX, extractor.convertPairsToVectors(trainPairedQA))
+valX = extractor.concat(valX, extractor.convertPairsToVectors(valPairedQA))
 
 
 ##################################################################
@@ -104,15 +119,6 @@ candidates["Linear SVC, C = 1.0"] = (LinearSVC(class_weight='balanced'), False, 
 candidates["Linear SVC, X normalization, C = 1.0"] = (LinearSVC(class_weight='balanced'), True, False)
 candidates["Linear SVC, C = 1.0, feature selection"] = (LinearSVC(class_weight='balanced'), False, True)
 candidates["Linear SVC, X normalization, C = 1.0, feature selection"] = (LinearSVC(class_weight='balanced'), True, True)
-
-# Try SVM with polynomial kernel order 2 (to capture first-order interactions between features i.e. x_1^2 and x_1x_2)
-#  - Currently disabled because generalization error about as good as linear SVC but takes too long to run.
-#  - but leaving in because in future with more variables added in form of dummy buckets may become useful
-# from sklearn.svm import SVC
-# candidates["SVC w/ polynomial kernel (d=2), C = 1.0"] = (SVC(class_weight='balanced', kernel='poly', degree=2), False, False)
-# candidates["SVC w/ polynomial kernel (d=2), X normalization, C = 1.0"] = (SVC(class_weight='balanced', kernel='poly', degree=2), True, False)
-# candidates["SVC w/ polynomial kernel (d=2), C = 1.0, feature selection"] = (SVC(class_weight='balanced', kernel='poly', degree=2), False, True)
-# candidates["SVC w/ polynomial kernel (d=2), X normalization, C = 1.0, feature selection"] = (SVC(class_weight='balanced', kernel='poly', degree=2), True, True)
 
 
 ##################################################################
