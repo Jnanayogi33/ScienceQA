@@ -43,58 +43,21 @@ def downloadWikiPage(keyword):
     return sections
 
 
-# Master function for downloading search terms from wikipedia
-#  - Takes as input list of keywords, returns dictionary mapping original inputs to outputs
-def getWikiKeywords(rawWords, workerNum = 20, iterations=3, redundancies=False):
-    terms = {}
-    rawList = utils.workerPool(rawWords, downloadWikiSearchResults, workerNum, redundancies)
-    for result in rawList: terms[result[0]] = result[1]
-    return terms
-
-
-# Master function for getting wikipedia pages given keywords
-#  - Takes as input list of keywords, returns dictionary mapping original inputs to outputs
-def getWikiPages(keywords, workerNum = 20, iterations=3, redundancies=False): 
-    pages = {}
-    pageList = utils.workerPool(keywords, downloadWikiPage, workerNum, iterations, redundancies)
-    for result in pageList: pages[result[0]] = result[1]
-    return pages
-
-
 # Download all wikipedia pages matching given set of noun chunks
 #  - Returns two dictionaries: noun chunk --> keywords, and keyword --> page sections --> list of section paragraphs
 #  - Keep separate to minimize memory usage since there would be a lot of redundancy if combined
 def getWikipediaCompendium(nounChunks, workerNum = 20, iterations=3, redundancies=False):
     
-    # print("Getting all wikipedia-specific keywords")
-    # chunk2keywords = getWikiKeywords(nounChunks, workerNum, iterations, redundancies)
-    # utils.saveData(chunk2keywords, 'ScienceQASharedCache/WikiChunk2KeyWords')
+    print("Getting all wikipedia-specific keywords")
+    chunk2keywords = utils.poolDownloader(nounChunks, downloadWikiSearchResults, workerNum, iterations, redundancies)
+    utils.saveData(chunk2keywords, 'ScienceQASharedCache/WikiChunk2KeyWords')
 
-    folds = 100
-    chunk2keywords = utils.loadData('ScienceQASharedCache/WikiChunk2KeyWords')
-    # keywords = []
-    # for chunk in chunk2keywords.keys(): 
-    #     if chunk2keywords[chunk] == None: continue
-    #     keywords += chunk2keywords[chunk]
-    # keywords = list(set(keywords))
-
-    # for i in list(range(92,folds)):
-    #     lowSplit = int(i*len(keywords)/folds)
-    #     highSplit = int((i+1)*len(keywords)/folds)
-    #     print("Working on pages", lowSplit, "to", highSplit)
-    #     keyword2pages = getWikiPages(keywords[lowSplit:highSplit], workerNum, iterations, redundancies)
-    #     utils.saveData(keyword2pages, 'ScienceQASharedCache/WikiKeyword2Pages' + str(i))
-
-    keyword2pages = {}
-    for i in list(range(folds)):
-        curr = utils.loadData('ScienceQASharedCache/WikiKeyword2Pages' + str(i))
-        for key in curr.keys():
-            keyword2pages[key] = curr[key]
-    utils.saveData(keyword2pages, 'ScienceQASharedCache/WikiKeyword2Pages')
-
-    leftOvers = utils.poolDownloader(None, downloadWikiPage, workerNum, iterations, redundancies)
-    for key in leftOvers.keys():
-        keyword2pages[key] = leftOvers[key]
+    print("Getting all wikipedia pages")
+    keywords = []
+    for chunk in chunk2keywords.keys(): 
+        if chunk2keywords[chunk] == None: continue
+        keywords += chunk2keywords[chunk]
+    keyword2pages = utils.poolDownloader(keywords, downloadWikiPage, workerNum, iterations, redundancies)
 
     return chunk2keywords, keyword2pages
 
@@ -192,8 +155,8 @@ def getFreebaseCompendium(nounChunks, workerNum = 20, iterations=3, redundancies
     print("Getting all freebase triples")
     mids = []
     for chunk in chunk2mids.keys():
-        if chunk2mids[key] == None: continue
-        mids += chunk2mids[key]
+        if chunk2mids[chunk] == None: continue
+        mids += chunk2mids[chunk]
     mid2triples = utils.poolDownloader(mids, freebaseTopicQuery, workerNum, iterations, redundancies)
 
     return chunk2mids, mid2triples

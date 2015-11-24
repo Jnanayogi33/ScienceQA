@@ -65,8 +65,9 @@ def workerPool(inputList, workFunction, numWorkers=20, iterations=3, redundancie
                         time.sleep(30)
             time.sleep(30)
             for worker in workers:
-                print("Joining workers for this round")
-                if worker.is_alive(): worker.join(1)
+                if worker.is_alive():
+                    print("Joining worker for this round:", worker.workerID) 
+                    worker.join(1)
         print("Worker Pool: Done joining input queue for iteration round", iteration+1)
         while not outputQueue.empty():
             elem = outputQueue.get()
@@ -91,13 +92,13 @@ def poolDownloader(inputList, workerFunction, workerNum = 20, iterations=3, redu
     inputList = list(set(inputList))
     saveData(inputList, 'ScienceQASharedCache/inputList_poolRuns_' + str(poolRuns))
     # inputList = loadData('ScienceQASharedCache/inputList_poolRuns_' + str(poolRuns))
-
+    
     folds = max(int(len(inputList)/1000),1)
     outputs = {}
     for i in list(range(0, folds)):
         lowSplit = int(i*len(inputList)/folds)
         highSplit = int((i+1)*len(inputList)/folds)
-        print("Working on items", lowSplit, "to", highSplit)
+        print("Working on items", lowSplit, "to", highSplit, "out of total", len(inputList))
         rawList = workerPool(inputList[lowSplit:highSplit], workerFunction, workerNum, iterations, redundancies)
         currOutputs = {}
         for result in rawList: currOutputs[result[0]] = result[1]
@@ -118,6 +119,7 @@ def poolDownloader(inputList, workerFunction, workerNum = 20, iterations=3, redu
 
     for i in list(range(folds)):
         os.remove('ScienceQASharedCache/currOutputs_' + str(i) + "_poolRuns_" + str(poolRuns))
+    os.remove('ScienceQASharedCache/inputList_poolRuns_' + str(poolRuns))
 
     return outputDict
 
