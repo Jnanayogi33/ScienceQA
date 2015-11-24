@@ -4,21 +4,20 @@ import copy
 import time
 import os
 
-regentsDataPath = 'Regents_Train.tsv'
+regentsDataPath = './Data/Regents_Train.tsv'
+trainData = './Data/training_set.tsv'
 
 class WordGraph:
 	def __init__(self, question, N):
 		print('Question:', question)
 		self.graph = {}
 		self.N = N
-		self.question_keywords = util.getKeywords(question)
-		print('Question keywords extracted:', self.question_keywords)
-		self.importance = {kw: 1/len(self.question_keywords) for kw in self.question_keywords}
+		self.questionKeywords = util.getKeywords(question)
+		print('Question keywords extracted:', self.questionKeywords)
+		self.importance = {kw: 1/len(self.questionKeywords) for kw in self.questionKeywords}
 		# self.importance = util.getImportanceDict(question)
 		print('Keyword importance:', self.importance)
-		# for kw in self.question_keywords:
-		# 	self.addWord(kw, iskeyword=True)
-		initialWords = self.bestWords() + self.question_keywords
+		initialWords = self.bestWords() + self.questionKeywords
 		print('Nodes are:', initialWords)
 		for word in initialWords:
 			self.addWord(word)
@@ -57,7 +56,7 @@ class WordGraph:
 		'''Returns score = SUM(kw_importance * similarity)'''
 		word = util.getToken(w)
 		total = 0
-		for kw in self.question_keywords:
+		for kw in self.questionKeywords:
 			keyword = util.getToken(kw)
 			total += self.importance[kw] * keyword.similarity(word)
 		return total
@@ -66,14 +65,14 @@ class WordGraph:
 		'''Returns best N * num_keywords 1st order links 
 		to question keywords'''
 		words = []
-		for keyword in self.question_keywords:
+		for keyword in self.questionKeywords:
 			neighbors = util.getRelations(keyword)
 			for nbr in neighbors:
 				if nbr not in words:
 					words.append(nbr)
 		words = sorted(words, key=self.relevanceScore)
 		words.reverse()
-		limit = len(self.question_keywords) * self.N
+		limit = len(self.questionKeywords) * self.N
 		return words[0 : limit + 1]
 
 	def coherenceScore(self, w):
@@ -86,34 +85,50 @@ class WordGraph:
 
 	def pruneGraph(self):
 		'''Prunes graph based on coherence'''
+		# print('Preprune: {}'.format(self.graph))
 		totalWords = len(self.graph.keys())
 		counter = 0
-		isValid = lambda word: (word not in self.question_keywords) or (word == self.answer)
+		# Never remove question keywords or answer keywords
+		isValid = lambda word: (word not in self.questionKeywords) or (word in self.answerKeywords)
 		words = [w for w in self.graph if isValid(w)]
 		words = sorted(words, key=self.coherenceScore)
 		words.reverse()
-		while words[-1] != self.answer:
+		while words[-1] not in self.answerKeywords:
 			counter += 1
 			worstWord = words.pop()
 			self.removeWord(worstWord)
+		# print('After prune: {}'.format(self.graph))
 		print('{} out of {} words were pruned'.format(counter, totalWords))
 
 	def getAnswerScore(self, answer):
-		self.answer = answer
-		self.addWord(self.answer)
+		''' |answer| is a string '''
+		### Get density metric
+		self.answerKeywords = util.getKeywords(answer)
+		for keyword in self.answerKeywords:
+			self.addWord(keyword)
 		self.pruneGraph()
-		finalScore = self.coherenceScore(answer)
+		finalScore = 0
+		for keyword in self.answerKeywords:
+			finalScore += self.coherenceScore(keyword)
 		print('For answer {}, final score is {}'.format(answer, finalScore))
-		return finalScore
+
+		# Get search metric
+		searchScore = util.getAnswerCost(self)
+		print('Search score: {}'.format(searchScore))
+		return finalScore, searchScore
+
+	def getNeighbors(self, word):
+		return self.graph[word]
 
 class Test:
-	def __init__(self, start, end, N):
+	def __init__(self, start, end, level, N):
 		self.LETTERS = ['A', 'B', 'C', 'D']
-		self.fullTest = self.getTest()
+		self.fullTest = self.eightGradeTest() if level == 8 else self.getTest()
 		self.test = [q for i, q in enumerate(self.fullTest) if (i < end and i >= start)]
 		self.correct = 0
 		self.incorrect = 0
 		self.answerReport = []
+		self.searchAnswerReport = []
 		self.timeReport = []
 		self.N = N
 
@@ -163,14 +178,42 @@ class Test:
 				test.append(question)
 		return test
 
+	def eightGradeTest(self):
+		test = []
+		trainQA = util.extractQA(trainData)
+		for i, line in enumerate(trainQA):
+			answers = [ans.strip() for ans in line[3:7]]
+			qid = line[0]
+			questionText = line[1]
 
-	def takeTestMindmaps(self):
+			# get only one word answers
+			# oneWordAnswers = True
+			# for a in answers:
+			# 	if len(a.split()) > 1:
+			# 		oneWordAnswers = False
+			# 		break
+
+			# if oneWordAnswers:
+			correctAnswer = line[2]
+			question = (questionText.strip(), answers, correctAnswer)
+			test.append(question)
+
+		return test
+
+
+	def takeTest(self):
 		self.reset()
+		densityCorrect = 0
+		searchCorrect = 0
+		w2vCorrect = 0
+		# Take test
 		for num, question in enumerate(self.test):
 			print('\nQuestion {} ---------------------------'.format(num+1))
 			# Think about question -> Generate scene
 			start = time.time()
 			questionText, answers, correctAnswer = question
+
+			print('Question: {}'.format(questionText))
 
 			# save mindmap for question
 			if questionText in self.mindmaps:
@@ -184,23 +227,44 @@ class Test:
 				local.close()
 				print('Mindmap saved.')
 
-			# Compare answer to scene
-			answerScores = []
+			keywords = wordGraph.questionKeywords
+
+			# Get density & search scores
+			densityScores = []
+			searchScores = []
+			word2vecScores = []
 			for ans in answers:
 				questionGraph = copy.deepcopy(wordGraph)
-				score = questionGraph.getAnswerScore(ans)
-				answerScores.append(score)
+				densityScore, searchScore = questionGraph.getAnswerScore(ans)
+				densityScores.append(searchScore)
+				searchScores.append(searchScore)
+				word2vecScores.append(util.averageSimilarity(keywords, ans))
 
-			# Mark question
-			index = answerScores.index(max(answerScores))
-			if self.LETTERS[index] == correctAnswer:
+			# Mark using density score
+			density_index = densityScores.index(max(densityScores))
+			if self.LETTERS[density_index] == correctAnswer:
 				self.correct += 1
+				densityCorrect += 1
 			else:
 				self.incorrect += 1
+
+			# Mark question using search scores
+			search_index = searchScores.index(min(searchScores))
+			if self.LETTERS[search_index] == correctAnswer:
+				searchCorrect += 1
+
+			# Mark question using word2vec
+			w2v_index = word2vecScores.index(max(word2vecScores))
+			if self.LETTERS[search_index] == correctAnswer:
+				w2vCorrect += 1
+
 			end = time.time()
 
-			self.answerReport.append((answerScores, index, correctAnswer))
+			self.answerReport.append((densityScores, density_index, correctAnswer))
 			self.timeReport.append(end - start)
+
+		print('Out of {} questions'.format(len(self.test)))
+		print('Density: {}, Search: {}, Word2Vec: {}'.format(densityCorrect, searchCorrect, w2vCorrect))
 
 	def takeTestW2V(self):
 		self.reset()
@@ -225,66 +289,3 @@ class Test:
 			self.answerReport.append((answerScores, index, correctAnswer))
 			self.timeReport.append(end - start)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-######################################################
-# Tests
-# fourthGradeExam = Test.getTest()
-# correct, incorrect = Test.takeTest(fourthGradeExam, questions=1)
-
-
-# question = 'Which force causes rocks to roll downhill'
-# wordGraph = WordGraph(question, N=6)
-# ans = 'gravity'
-# wordGraph.getAnswerScore(ans)
-# wordGraph.addWord(ans)
-# wordGraph.pruneGraph()
-
-
-
-
-# initialization test
-# print(wordGraph.graph)
-
-# getRelations test
-# print(wordGraph.getRelations('talk'))
-
-# addNode test
-# wordGraph.addWord('test_word')
-# print(wordGraph.graph)
-
-# removeNode test
-# wordGraph.removeWord('test_word')
-# print(wordGraph.graph)

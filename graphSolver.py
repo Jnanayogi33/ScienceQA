@@ -52,7 +52,7 @@ class UniformCostSearch(SearchAlgorithm):
             if state == None: break
             self.numStatesExplored += 1
             if self.verbose >= 2:
-                print "Exploring %s with pastCost %s" % (state, pastCost)
+                print("Exploring {} with pastCost {}".format(state, pastCost))
 
             # Check if we've reached the goal; if so, extract solution
             if problem.isGoal(state):
@@ -64,21 +64,22 @@ class UniformCostSearch(SearchAlgorithm):
                 self.actions.reverse()
                 self.totalCost = pastCost
                 if self.verbose >= 1:
-                    print "numStatesExplored = %d" % self.numStatesExplored
-                    print "totalCost = %s" % self.totalCost
-                    print "actions = %s" % self.actions
+                    print("numStatesExplored = {}".format(self.numStatesExplored)) 
+                    print('totalCost = {}'.format(self.totalCost))
+                    print('actions = {}'.format(self.actions))
+
                 return
 
             # Expand from |state| to new successor states,
             # updating the frontier with each newState.
             for action, newState, cost in problem.succAndCost(state):
                 if self.verbose >= 3:
-                    print "  Action %s => %s with cost %s + %s" % (action, newState, pastCost, cost)
+                    print("  Action {} => {} with cost {} + {}".format(action, newState, pastCost, cost))
                 if frontier.update(newState, pastCost + cost):
                     # Found better way to go to |newState|, update backpointer.
                     backpointers[newState] = (action, state)
         if self.verbose >= 1:
-            print "No path found"
+            print("No path found")
 
 # Data structure for supporting uniform cost search.
 class PriorityQueue:

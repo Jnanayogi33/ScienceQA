@@ -3,7 +3,6 @@ import QApreparer as extractor
 import learningModels as modeler
 import searchText as scraper
 
-
 ##################################################################
 print("0. Set global parameters")
 
@@ -73,13 +72,11 @@ valX = extractor.convertPairsToVectors(valPairedQA)
 #  - Use oldX = extractor.concat(oldX, newFeatures) to concatenate with existing X variables
 #  - Remember to do this on both trainX AND valX because we need to be building up valX for final result
 
-
 ##################################################################
 print("3. Create Y variables")
 
 # Create one dimensional array of labels (1 if True, 0 if False)
 trainY = extractor.extractYVector(trainPairedQA)
-
 
 ##################################################################
 print("4. Specify a variety of models we think will be appropriate")

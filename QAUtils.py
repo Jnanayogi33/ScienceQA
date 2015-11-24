@@ -4,7 +4,6 @@ from queue import Queue
 import queue
 from threading import Thread
 
-
 # Takes input from inputQueue, applies work function, puts return into outputQueue
 #  - If any exception caught in process, puts a "None" into outputQueue
 #  - Otherwise puts the tuple (task, result) into outputQueue
@@ -80,7 +79,6 @@ def workerPool(inputList, workFunction, numWorkers=20, iterations=3, redundancie
         outputList += [(inputItem, None)]
     return outputList
 
-
 # Master function for downloading in chunks, saving progress in case of download failure
 #  - Downloads in chunks of 1000 items at a time
 #  - Saves each chunk into cache, then combines at end
@@ -123,15 +121,11 @@ def poolDownloader(inputList, workerFunction, workerNum = 20, iterations=3, redu
 
     return outputDict
 
-
-
-
 # Basic save data function
 def saveData(data, outputDest):
     dataOutput = open(outputDest, 'wb')
     pickle.dump(data, dataOutput)
     dataOutput.close()
-
 
 # Basic load data function
 def loadData(inputSource):

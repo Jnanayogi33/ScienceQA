@@ -7,6 +7,7 @@ import sys, os
 import pickle
 import spacy.en
 import time, string, math
+from graphSolver import UniformCostSearch, SearchProblem
 
 ###############################################################
 # Setup
@@ -37,6 +38,7 @@ if os.path.isfile('WN_relations.p'):
 	local.close()
 else:
 	wnRelations = {}
+
 ###############################################################
 # Utility Functions
 
@@ -69,12 +71,18 @@ def getSearchFromFile():
 		snippetDoc += i['snippet']
 	return snippetDoc
 
+def extractNounChunks(sentence):
+	nounChunks = []
+	for chunk in nlp(sentence).noun_chunks:
+		nounChunks.append(chunk)
+	return nounChunks
+
 def getKeywords(questionText):
 	'''Returns array of unique keywords given |text| '''
 	question = nlp(questionText)
 	is_keyword = lambda t: (not t.is_stop) and t.is_alpha
 	keywords = [t.lemma_ for t in question if is_keyword(t) and len(t) > 0]
-	return list(set(keywords))
+	return list(set(keywords))d
 
 def getToken(word):
 	'''Returns spacy token from |word|'''
@@ -288,3 +296,98 @@ def getLexicalFocus(question):
 	keywords = getKeywords
 	pass
 
+def extractQA(QAfile, validationSet=False):
+    sentences = open(QAfile).readlines()
+    result = [sentence.strip("\n").split("\t") for sentence in sentences[1:]]
+    for line in result:
+        if validationSet: assert(len(line) == 6)
+        else: assert(len(line) == 7)
+    return result
+
+def convertToQAPairs(raw, validationSet=False):
+    QAPairs = []
+    answers = ['A', 'B', 'C', 'D']
+    if validationSet:
+        for line in raw:
+            for x in range(len(answers)):
+                if "all of the above" in line[2+x].lower() or "none of the above" in line[2+x].lower(): continue
+                QAPairs += [[line[0], x, line[1], line[2+x]]]
+    else:
+        for line in raw:
+            if "all of the above" in line[6].lower() and line[2] == 'D':
+                for x in range(len(answers) - 1): QAPairs += [[line[0], x, line[1], line[3+x], True]]
+            elif "none of the above" in line[6].lower() and line[2] == 'D':
+                for x in range(len(answers) - 1): QAPairs += [[line[0], x, line[1], line[3+x], False]]
+            else:
+                for x in range(len(answers)): 
+                    if "all of the above" in line[3+x].lower() or "none of the above" in line[3+x].lower(): continue
+                    QAPairs += [[line[0], x, line[1], line[3+x], (line[2] == answers[x])]]
+    return QAPairs
+
+class KeywordSearchProblem(SearchProblem):
+    def __init__(self, wordGraph):
+        self.wordGraph = wordGraph
+        print('Graph: ', self.wordGraph.graph)
+
+        # get only question keywords with neighbors
+        self.questionKeywords = [keyword for keyword in self.wordGraph.questionKeywords \
+    							if len(self.wordGraph.graph[keyword]) > 0]
+        self.answerKeywords = [keyword for keyword in self.wordGraph.answerKeywords \
+                				if len(self.wordGraph.graph[keyword]) > 0]
+        self.keywords = self.questionKeywords + self.answerKeywords
+        print('Keywords:', self.keywords)
+
+    def startState(self):
+    	# states are all vistable keywords
+        visitedKeywords = {keyword: False for keyword in self.keywords}
+
+        # Make dict immutable so Priority Queue can handle it
+        visitedKeywords = frozenset(visitedKeywords.items())
+
+        # Start state is first question keyword
+        return (self.questionKeywords[0], visitedKeywords)
+
+    def isGoal(self, state):
+        currWord, visitedKeywords = state
+        visitedKeywords = dict(visitedKeywords)
+        if False in visitedKeywords.values():
+            return False
+        else:
+            return True
+
+    def succAndCost(self, state):
+        results = []
+        currWord, visitedKeywords = state
+        visitedKeywords = dict(visitedKeywords) # was frozen in state
+        current = getToken(currWord)
+
+        # get neighbors
+        neighbors = self.wordGraph.getNeighbors(currWord)
+
+        for neighbor in neighbors:
+
+            # word2vec distance between neighbors is cost
+            # cost is inverse of similarity, always +ve
+            cost = 1 - getToken(neighbor).similarity(current)
+            
+            # if neighbor is a keyword, change visitedKeywords[neighbor] to True
+            if neighbor in self.keywords:
+                nextVisited = dict(visitedKeywords)
+                nextVisited[neighbor] = True
+                newState = (neighbor, frozenset(nextVisited.items()))
+            else:
+                newState = (neighbor, frozenset(visitedKeywords.items()))
+
+            results.append((neighbor, newState, cost))
+
+        return results
+
+def getAnswerCost(wordGraph):
+	ucs = UniformCostSearch(verbose=3)
+	ucs.solve(KeywordSearchProblem(wordGraph))
+	cost = ucs.totalCost
+	if ucs.actions != None:
+		numEdges = len(ucs.actions)
+		return cost / numEdges
+	else:
+		return float('inf')

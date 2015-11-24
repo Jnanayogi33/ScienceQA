@@ -5,7 +5,6 @@ from random import shuffle
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 
-
 # Run linear kernel SVC and l1 penalty on X and Y, return index of features with non-zero coefficients
 #  - used for feature selection
 #  - l1 penalty norm pushes individual weight values to 0 if they provide little/no information

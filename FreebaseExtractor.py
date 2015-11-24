@@ -14,8 +14,6 @@ def topicQuery(topic_id):
         'lang' : 'en',
         'key': api_key,
         '&limit': queryResultLimit
-        # 'filter': 'suggest',
-
     }
     url = service_url + topic_id + '?' + urllib.parse.urlencode(params)
     topic = json.loads(urllib.request.urlopen(url).read().decode())
