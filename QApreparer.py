@@ -1,11 +1,22 @@
 # import countWords as CW
-import os, re
+import os, re, pickle, copy
 import numpy
-import editdistance
+import util
+from Models import WordGraph
+# import editdistance
 from spacy.en import English, LOCAL_DATA_DIR
 data_dir = os.environ.get('SPACY_DATA', LOCAL_DATA_DIR)
 nlp = English(data_dir=data_dir)
 questionWordSet = ["who", "what", "when", "where", "how", "why", "which"]
+
+# load mindmaps from local score
+if os.path.isfile('mindmaps.p'):
+    print('mindmaps Found.')
+    local = open('mindmaps.p', 'rb')
+    localMindmaps = pickle.load(local)
+    local.close()
+else:
+    localMindmaps = {}
 
 # Get questions and answers in format ['id', 'question', 'correctAnswer', 'answerA', ..., 'answerD']
 #  - In case it is validation set, it will return ['id', 'question', 'answerA', ..., 'answerD']
@@ -197,63 +208,138 @@ def convertQAPairToSentence(pair):
 # Find closest match with wikipedia, report cosine similarity
 #  - K-beams implementation: look at k best pages, k best passages, k best sentences
 #  - Proximity measured by word2vec cosine similarity, then levenshtein distance
-def findClosestWikiMatch(pair, chunk2keys, key2pages, k=5):
+# def findClosestWikiMatch(pair, chunk2keys, key2pages, k=5):
 
-    targetSentence = nlp(convertQAPairToSentence(pair))
-    # print("Finding closest match for", pair[0])
+#     targetSentence = nlp(convertQAPairToSentence(pair))
+#     # print("Finding closest match for", pair[0])
     
-    #Pull out the relevant passages
-    chunksRaw = [chunk for chunk in nlp(pair[2]).noun_chunks] + [chunk for chunk in nlp(pair[3]).noun_chunks]
-    chunks = [chunk.text for chunk in chunksRaw]
-    keys = sum([chunk2keys[chunk] for chunk in chunks if chunk in chunk2keys.keys()],[])
-    pages = [key2pages[key] for key in keys if key in key2pages.keys() and key is not None]
+#     #Pull out the relevant passages
+#     chunksRaw = [chunk for chunk in nlp(pair[2]).noun_chunks] + [chunk for chunk in nlp(pair[3]).noun_chunks]
+#     chunks = [chunk.text for chunk in chunksRaw]
+#     keys = sum([chunk2keys[chunk] for chunk in chunks if chunk in chunk2keys.keys()],[])
+#     pages = [key2pages[key] for key in keys if key in key2pages.keys() and key is not None]
 
-    #Focus on the k pages where most/all of the noun chunks appear
-    chunksLemmatized = [chunk.lemma_ for chunk in chunksRaw]
-    pageScores = []
-    for page in pages:
-        if page == None: 
-            pageScores += [-1]
-            continue
-        curr = " ".join(sum(page.values(), []))
-        pageScores += [sum(chunk in curr for chunk in chunksLemmatized)]
-    topKpageScores = sorted(pageScores, reverse=True)[:k]
-    topKpages = [pages[pageScores.index(score)] for score in topKpageScores]
+#     #Focus on the k pages where most/all of the noun chunks appear
+#     chunksLemmatized = [chunk.lemma_ for chunk in chunksRaw]
+#     pageScores = []
+#     for page in pages:
+#         if page == None: 
+#             pageScores += [-1]
+#             continue
+#         curr = " ".join(sum(page.values(), []))
+#         pageScores += [sum(chunk in curr for chunk in chunksLemmatized)]
+#     topKpageScores = sorted(pageScores, reverse=True)[:k]
+#     topKpages = [pages[pageScores.index(score)] for score in topKpageScores]
 
-    #Choose k best passages matching whole target:
-    passages = sum([list(page.values()) for page in topKpages if page is not None], [])
-    passages = [nlp(" ".join(passage)) for passage in passages if len(passage) is not 0]    
-    passageSimScores = [targetSentence.similarity(passage) for passage in passages]
-    topKpassagescores = sorted(passageSimScores, reverse=True)[:k]
-    topKpassages = [passages[passageSimScores.index(score)] for score in topKpassagescores]
+#     #Choose k best passages matching whole target:
+#     passages = sum([list(page.values()) for page in topKpages if page is not None], [])
+#     passages = [nlp(" ".join(passage)) for passage in passages if len(passage) is not 0]    
+#     passageSimScores = [targetSentence.similarity(passage) for passage in passages]
+#     topKpassagescores = sorted(passageSimScores, reverse=True)[:k]
+#     topKpassages = [passages[passageSimScores.index(score)] for score in topKpassagescores]
 
-    #Choose k best sentences matching whole target:
-    targetNumSents = len(list(targetSentence.sents))
-    sentences = []
-    for passage in topKpassages:
-        currSentences = list(passage.sents)
-        if targetNumSents >= len(currSentences): 
-            sentences += [passage]
-        for i in range(targetNumSents, len(currSentences)+1):
-            rawSentence = [segment.text for segment in currSentences[i-targetNumSents:i] \
-                if (segment.text != '') and (segment.text.isspace() != True)]
-            if rawSentence == []: continue
-            sentences += [nlp(" ".join(rawSentence))]
-    sentenceSimScores = [targetSentence.similarity(sentence) for sentence in sentences]
-    topKsentencescores = sorted(sentenceSimScores, reverse=True)[:k]
-    topKsentences = [sentences[sentenceSimScores.index(score)] for score in topKsentencescores]
+#     #Choose k best sentences matching whole target:
+#     targetNumSents = len(list(targetSentence.sents))
+#     sentences = []
+#     for passage in topKpassages:
+#         currSentences = list(passage.sents)
+#         if targetNumSents >= len(currSentences): 
+#             sentences += [passage]
+#         for i in range(targetNumSents, len(currSentences)+1):
+#             rawSentence = [segment.text for segment in currSentences[i-targetNumSents:i] \
+#                 if (segment.text != '') and (segment.text.isspace() != True)]
+#             if rawSentence == []: continue
+#             sentences += [nlp(" ".join(rawSentence))]
+#     sentenceSimScores = [targetSentence.similarity(sentence) for sentence in sentences]
+#     topKsentencescores = sorted(sentenceSimScores, reverse=True)[:k]
+#     topKsentences = [sentences[sentenceSimScores.index(score)] for score in topKsentencescores]
 
-    #Check levenshtein distance on lemmatized word basis with target sentence
-    targetLemmatized = [tok.lemma_ for tok in targetSentence]
-    sentsLemmatized = [[tok.lemma_ for tok in sentence] for sentence in topKsentences]
-    lemmatizedDistanceScores = [editdistance.eval(targetLemmatized, currSent) for currSent in sentsLemmatized]
-    topKdistanceScores = sorted(lemmatizedDistanceScores)[:k]
-    topKLemmatizedSents = [sentsLemmatized[lemmatizedDistanceScores.index(score)] for score in topKdistanceScores]
+#     #Check levenshtein distance on lemmatized word basis with target sentence
+#     targetLemmatized = [tok.lemma_ for tok in targetSentence]
+#     sentsLemmatized = [[tok.lemma_ for tok in sentence] for sentence in topKsentences]
+#     lemmatizedDistanceScores = [editdistance.eval(targetLemmatized, currSent) for currSent in sentsLemmatized]
+#     topKdistanceScores = sorted(lemmatizedDistanceScores)[:k]
+#     topKLemmatizedSents = [sentsLemmatized[lemmatizedDistanceScores.index(score)] for score in topKdistanceScores]
 
-    print('Results for', pair[0], "--", [float(topKpageScores[0])/len(chunksRaw), topKpassagescores[0], topKsentencescores[0], float(topKdistanceScores[0])/len(targetLemmatized)])
-    return [float(topKpageScores[0])/len(chunksRaw), topKpassagescores[0], topKsentencescores[0], float(topKdistanceScores[0])/len(targetLemmatized)]
+#     print('Results for', pair[0], "--", [float(topKpageScores[0])/len(chunksRaw), topKpassagescores[0], topKsentencescores[0], float(topKdistanceScores[0])/len(targetLemmatized)])
+#     return [float(topKpageScores[0])/len(chunksRaw), topKpassagescores[0], topKsentencescores[0], float(topKdistanceScores[0])/len(targetLemmatized)]
 
 
-def getWikiMatchFeatures(pairs, chunk2keys, key2pages, k=5):
-    features = [findClosestWikiMatch(pair, chunk2keys, key2pages, k) for pair in pairs]
+# def getWikiMatchFeatures(pairs, chunk2keys, key2pages, k=5):
+#     features = [findClosestWikiMatch(pair, chunk2keys, key2pages, k) for pair in pairs]
+#     return numpy.row_stack(tuple(features))
+
+def mindmapFeatureExtractor(pair):
+    N = 6
+    features = []
+    questionText, answerText = pair[2], pair[3]
+
+    # get mindmap ==> wordGraph
+    if questionText in localMindmaps:
+        # print('Mindmap accessed from local store!')
+        wordGraph = localMindmaps[questionText]
+    else:
+        # save mindmap to localMindmaps
+        wordGraph = WordGraph(questionText, N)
+        localMindmaps[questionText] = wordGraph
+
+    # make a deep copy of wordGraph to prevent cross-answer
+    # contamination ==> save as questionGraph
+    questionGraph = copy.deepcopy(wordGraph)
+
+    sizeOfQuestionGraph = len(questionGraph.graph)
+
+    # get coherence score of answer keywords
+    answerCoherence = questionGraph.getAnswerScore(answerText)
+
+    # get average number of connections to all answer keywords
+    # answerKeywords = util.getKeywords(answerText)
+    # averageAnswerConnections = sum([len(questionGraph.graph[keyword]) for keyword in answerKeywords if keyword in questionGraph.graph])/len(answerKeywords)
+
+    # get number of keywords in final graph
+    sizeOfAnswerGraph = len(questionGraph.graph)
+
+    # get coherence score of question keywords
+    questionCoherence = 0
+    for keyword in util.getKeywords(questionText):
+        if keyword in questionGraph.graph:
+            questionCoherence += wordGraph.coherenceScore(keyword)
+
+    # get number of pruned words
+    prunedWords = sizeOfQuestionGraph - sizeOfAnswerGraph
+
+    features.append(sizeOfQuestionGraph)
+    features.append(sizeOfAnswerGraph)
+    features.append(questionCoherence)
+    features.append(answerCoherence)
+    # features.append(averageAnswerConnections)
+    features.append(prunedWords)
+
+    return features
+
+def getAllMindMapFeatures(pairs):
+    features = []
+    for i, pair in enumerate(pairs):
+        print('working on {} of {}'.format(i, len(pairs)))
+        features.append(mindmapFeatureExtractor(pair))
+
+    # save mindmaps in pickle file so it runs wickedly
+    # fast next time around
+    local = open('mindmaps.p', 'wb')
+    pickle.dump(localMindmaps, local)
+    local.close()
+    print('Mindmaps saved.')
+
+    # get row sums
+    numFeatures = len(features[0])
+    rowSums = [0] * (numFeatures) 
+    for row in features:
+        for i in range(numFeatures):
+            rowSums[i] += row[i]
+    
+    # normalize features
+    for row in features:
+        for i in range(numFeatures):
+            row[i] = row[i]/rowSums[i]
+    
     return numpy.row_stack(tuple(features))

@@ -1,0 +1,32 @@
+- Using word2vec + Mindmaps -
+
+Linear SVC, C = 1.0, feature selection scores -- Train: 0.3546 Test: 0.294
+Linear SVC, C = 1.0 scores -- Train: 0.3734 Test: 0.3036
+Logistic regression, X normalization, C = 1.0, feature selection scores -- Train: 0.3814 Test: 0.286
+80000000000005
+Logistic regression, C = 1.0, feature selection scores -- Train: 0.3238 Test: 0.27880000000000005
+Logistic regression, C = 1.0 scores -- Train: 0.3415 Test: 0.2972
+Logistic regression, X normalization, C = 1.0 scores -- Train: 0.3804 Test: 0.28640000000000004
+Linear SVC, X normalization, C = 1.0 scores -- Train: 0.3325 Test: 0.258
+Linear SVC, X normalization, C = 1.0, feature selection scores -- Train: 0.3378 Test: 0.2612
+
+- Using word2vec -
+
+Logistic regression, C = 1.0 scores -- Train: 0.34080000000000005 Test: 0.292
+Linear SVC, X normalization, C = 1.0 scores -- Train: 0.3337 Test: 0.27040000000000003
+Linear SVC, C = 1.0 scores -- Train: 0.37410000000000004 Test: 0.2932
+Linear SVC, C = 1.0, feature selection scores -- Train: 0.351 Test: 0.2952
+Linear SVC, X normalization, C = 1.0, feature selection scores -- Train: 0.33050000000000007 Test: 0
+.268
+Logistic regression, C = 1.0, feature selection scores -- Train: 0.331 Test: 0.2912
+Logistic regression, X normalization, C = 1.0, feature selection scores -- Train: 0.3846 Test: 0.279
+6
+Logistic regression, X normalization, C = 1.0 scores -- Train: 0.38360000000000005 Test: 0.2988
+
+- Using Mindmaps - 
+
+
+
+
+
+

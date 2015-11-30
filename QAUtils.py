@@ -93,7 +93,7 @@ def poolDownloader(inputList, workerFunction, workerNum = 20, iterations=3, redu
     saveData(inputList, 'ScienceQASharedCache/inputList_poolRuns_' + str(poolRuns))
     # inputList = loadData('ScienceQASharedCache/inputList_poolRuns_' + str(poolRuns))
     
-    folds = max(int(len(inputList)/1000),1)
+    folds = max(int(len(inputList)/100000),1)
     outputs = {}
     for i in list(range(0, folds)):
         lowSplit = int(i*len(inputList)/folds)
