@@ -39,6 +39,8 @@ if os.path.isfile('WN_relations.p'):
 else:
 	wnRelations = {}
 
+
+
 ###############################################################
 # Utility Functions
 
@@ -251,11 +253,11 @@ def unpackTriples(triples, w):
 	return neighbors
 
 def getFBRelations(w):
-	# print('Getting FB relations for word: ', w)
 	# check for memory, else get new relations
 	if w in freebaseRelations:
-		# print('Accessed from local store!')
+		print('Accessed from local store!')
 		return freebaseRelations[w]
+	print('Getting FB relations for word: ', w)
 	neighbors = []
 	mids = searchQuery(w)
 	for mid in mids:
@@ -408,4 +410,3 @@ def getAnswerCost(wordGraph):
 		return cost / numEdges
 	else:
 		return float('inf')
-

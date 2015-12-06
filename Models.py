@@ -8,6 +8,15 @@ regentsDataPath = './ScienceQASharedCache/Regents_Train.tsv'
 trainData = './ScienceQASharedCache/training_set.tsv'
 validationData = './ScienceQASharedCache/validation_set.tsv'
 
+# second order keywords
+if os.path.isfile('keywords.p'):
+	print('Keywords Found.')
+	local = open('keywords.p', 'rb')
+	localKeywords = pickle.load(local)
+	local.close()
+else:
+	localKeywords = {}
+
 class WordGraph:
 	def __init__(self, question, N):
 		# print('Question:', question)
@@ -20,7 +29,8 @@ class WordGraph:
 		# self.importance = util.getImportanceDict(question)
 		# print('Keyword importance:', self.importance)
 
-		self.secondOrderKeywords = self.bestWords()
+		self.secondOrderKeywords = localKeywords[question] if question in localKeywords else self.bestWords()
+		
 		initialWords = self.secondOrderKeywords + self.questionKeywords
 		# print('Nodes are:', initialWords)
 
@@ -78,6 +88,7 @@ class WordGraph:
 		words = sorted(words, key=self.relevanceScore)
 		words.reverse()
 		limit = len(self.questionKeywords) * self.N
+
 		return words[0 : limit + 1]
 
 	def coherenceScore(self, w):
@@ -131,9 +142,10 @@ class WordGraph:
 		return self.secondOrderKeywords
 
 class Test:
-	def __init__(self, start, end, level, N):
+	def __init__(self, start, end, dataType, N):
 		self.LETTERS = ['A', 'B', 'C', 'D']
-		self.fullTest = self.trainSet() if level == 'eightTrain' else self.getTest()
+		self.fullTest = self.validationSet()
+		self.dataType = dataType
 		self.test = [q for i, q in enumerate(self.fullTest) if (i < end and i >= start)]
 		self.correct = 0
 		self.incorrect = 0
@@ -212,13 +224,15 @@ class Test:
 			test.append(question)
 		return test
 
-
 	def getFirstOrderKeywords(self):
 		keywords = []
 		# for each |question| in full test, get keywords
-		for i, question in enumerate(self.fullTest):
+		for i, question in enumerate(self.test):
 			print('Getting keyword for Q{}'.format(i))
-			questionText, answers, correctAnswer = question
+			if self.dataType == 'val':
+				questionText, answers = question
+			else:
+				questionText, answers, correctAnswer = question
 			keywords += util.getKeywords(questionText)
 			for ans in answers:
 				keywords += util.getKeywords(ans)
@@ -228,9 +242,25 @@ class Test:
 		keywords = []
 		for num, question in enumerate(self.test):
 			print('\nQuestion {} ---------------------------'.format(num+1))
-			questionText, answers, correctAnswer = question
-			wordGraph = WordGraph(questionText, self.N)
-			keywords += wordGraph.getSecondOrderKeywords()
+			if self.dataType == 'val':
+				questionText, answers = question
+			else:
+				questionText, answers, correctAnswer = question
+
+			# If available locally, return it
+			if questionText in localKeywords:
+				print('keywords accessed locally')
+				keywords += localKeywords[questionText]
+			else:
+				wordGraph = WordGraph(questionText, self.N)
+				newKeywords = wordGraph.getSecondOrderKeywords() 
+				keywords += newKeywords
+
+				localKeywords[questionText] = newKeywords
+				local = open('keywords.p', 'wb')
+				pickle.dump(localKeywords, local)
+				local.close()
+				print('keywords saved.')
 
 		keywords = list(set(keywords))
 		print('{} second order keywords found from {} questions'.format(len(keywords), num))

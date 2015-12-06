@@ -282,6 +282,10 @@ def mindmapFeatureExtractor(pair):
         # save mindmap to localMindmaps
         wordGraph = WordGraph(questionText, N)
         localMindmaps[questionText] = wordGraph
+        local = open('mindmaps.p', 'wb')
+        pickle.dump(localMindmaps, local)
+        local.close()
+        print('Mindmaps saved.')
 
     # make a deep copy of wordGraph to prevent cross-answer
     # contamination ==> save as questionGraph
@@ -322,13 +326,6 @@ def getAllMindMapFeatures(pairs):
     for i, pair in enumerate(pairs):
         print('working on {} of {}'.format(i, len(pairs)))
         features.append(mindmapFeatureExtractor(pair))
-
-    # save mindmaps in pickle file so it runs wickedly
-    # fast next time around
-    local = open('mindmaps.p', 'wb')
-    pickle.dump(localMindmaps, local)
-    local.close()
-    print('Mindmaps saved.')
 
     # get row sums
     numFeatures = len(features[0])

@@ -19,14 +19,14 @@ print("1. Load all preliminary data, do basic formatting, ")
 # Get questions and answers in format ['id', 'question', 'correctAnswer', 'answerA', ..., 'answerD']
 #  - In case it is validation set, it will return ['id', 'question', 'answerA', ..., 'answerD']
 trainRawQA = extractor.extractQA('ScienceQASharedCache/training_set.tsv')
-# valRawQA = extractor.extractQA('ScienceQASharedCache/validation_set.tsv', validationSet=True)
+valRawQA = extractor.extractQA('ScienceQASharedCache/validation_set.tsv', validationSet=True)
 
 # Convert questions and answers into pairs format ['id', 'option' (e.g. 0-3), 'question', 'answer', label (e.g. True/False)]
 #  - Q-A pairs where the answer is "all of the above" or "none of the above" were removed
 #  - Where "all of the above" or "none of the above" is the right answer, the remaining question-answer pair labels were changed to True or False respectively
 #  - In case it is validation set, then just return pairs format ['id', 'option', 'question', 'answer']
 trainPairedQA = extractor.convertToQAPairs(trainRawQA)
-# valPairedQA = extractor.convertToQAPairs(valRawQA, validationSet=True)
+valPairedQA = extractor.convertToQAPairs(valRawQA, validationSet=True)
 
 # Extract all noun chunks in the training and validation set
 #  - implementation uses pool of worker threads to speed up downloading
@@ -59,7 +59,7 @@ print("2. Create X variables")
 #  - Correlation between question and answer
 #  - Existence of different question words, other words indicating right answer approach
 trainX = extractor.basicFormatFeatures(trainPairedQA)
-# valX = extractor.basicFormatFeatures(valPairedQA)
+valX = extractor.basicFormatFeatures(valPairedQA)
 print('- Basic formatting complete')
 
 # k-beam search top wikipedia text match features (UNDER DEVELOPMENT)
@@ -71,20 +71,21 @@ print('- Basic formatting complete')
 #  - Create them in form (m,n) where m is number of data points, n is number of features
 #  - Use oldX = extractor.concat(oldX, newFeatures) to concatenate with existing X variables
 #  - Remember to do this on both trainX AND valX because we need to be building up valX for final result
-# trainX = extractor.concat(trainX, extractor.getAllMindMapFeatures(trainPairedQA))
+trainX = extractor.concat(trainX, extractor.getAllMindMapFeatures(trainPairedQA))
+valX = extractor.concat(valX, extractor.getAllMindMapFeatures(valPairedQA))
 
 # Append first order interaction terms of form x_1 * x_2
 #  - Note will generate order n^2 features, so do this only for most critical features
 from sklearn.preprocessing import PolynomialFeatures
 poly = PolynomialFeatures(interaction_only=True)
 trainX = poly.fit_transform(trainX)
-# valX = poly.fit_transform(valX)
+valX = poly.fit_transform(valX)
 
 # Attach array of one vector per Q-A pair representing average of individual word word2vec vectors in both question and answer
 #  - new implementation just uses spacy vectors
 #  - arrays returned are of the form (m, n) where m is number of data points, n is number of features (300 for word2vec)
 trainX = extractor.concat(trainX, extractor.convertPairsToVectors(trainPairedQA))
-# valX = extractor.concat(valX, extractor.convertPairsToVectors(valPairedQA))
+valX = extractor.concat(valX, extractor.convertPairsToVectors(valPairedQA))
 
 ##################################################################
 print("3. Create Y variables")
@@ -94,8 +95,8 @@ trainY = extractor.extractYVector(trainPairedQA)
 
 #Saving before we lose anything...
 utils.saveData(trainX, 'ScienceQASharedCache/trainX')
-# utils.saveData(trainX, 'ScienceQASharedCache/valX')
-# utils.saveData(trainY, 'ScienceQASharedCache/trainY')
+utils.saveData(trainX, 'ScienceQASharedCache/valX')
+utils.saveData(trainY, 'ScienceQASharedCache/trainY')
 
 ##################################################################
 print("4. Specify a variety of models we think will be appropriate")
@@ -132,8 +133,6 @@ print("5. Take best model, apply to validation set, save results as csv")
 #  - if "all of the above" is one of options, will check whether all answers are true
 #  - otherwise will just return answer amongst four with highest confidence score of being true
 bestModelParams = modeler.returnBestModel(trainX, trainY, candidates, trainRawQA, trainPairedQA)
-
-import pdb; pdb.set_trace()  # breakpoint 593f617b //
 
 # Take best model settings, train on whole training set, then apply trained model to validation set, get answers
 #  - Answers in the form "[('id1', 'correctAnswer1"), ...]

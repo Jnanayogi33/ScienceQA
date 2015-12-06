@@ -18,7 +18,8 @@ poolIterations = 2
 poolRedundancies = False
 
 # Get all keywords
-eightGradeExam = Test(start=0, end=2501, level='eight', N=6)
+eightGradeExam = Test(start=0, end=8132, dataType='val', N=6)
+
 keywords = eightGradeExam.getSecondOrderKeywords()
 
 # save second order keywords
@@ -29,7 +30,7 @@ print('Keywords saved.')
 
 # Filter keywords already in local freebaseRelations
 keywords = [kw for kw in keywords if kw not in freebaseRelations]
-print('Number of second order keywords left: {}'.format(len(keywords)))
+print('Number of first order keywords left: {}'.format(len(keywords)))
 
 start_download = time.time()
 
