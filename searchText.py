@@ -22,12 +22,10 @@ def downloadWikiSearchResults(rawWord):
 # Worker function for downloading entire wikipedia page based on the given keyword 
 #  - Return contents in dictionary form
 def downloadWikiPage(keyword):
-
     content = wiki.page(keyword)
     text = content.content
     title = content.title
     subtitle = title
-
     sections = {}
     sections[subtitle] = []
     for line in text.split("\n"):
@@ -47,7 +45,6 @@ def downloadWikiPage(keyword):
 #  - Returns two dictionaries: noun chunk --> keywords, and keyword --> page sections --> list of section paragraphs
 #  - Keep separate to minimize memory usage since there would be a lot of redundancy if combined
 def getWikipediaCompendium(nounChunks, workerNum = 20, iterations=3, redundancies=False):
-    
     print("Getting all wikipedia-specific keywords")
     chunk2keywords = utils.poolDownloader(nounChunks, downloadWikiSearchResults, workerNum, iterations, redundancies)
     utils.saveData(chunk2keywords, 'ScienceQASharedCache/WikiChunk2KeyWords')
@@ -83,10 +80,8 @@ def freebaseSearchQuery(query):
             'key': api_key,
             '&limit' : queryResultLimit
     }
-
     url = service_url + '?' + urllib.parse.urlencode(params)
     response = json.loads(urllib.request.urlopen(url).read().decode())
-
     mids = []
     for result in response['result']:
         if 'mid' in result.keys():
@@ -94,6 +89,25 @@ def freebaseSearchQuery(query):
     if mids == []: return None
     return mids
 
+
+# Worker function: given string query, returns list of search result names
+#  - if no search results, return None
+def freebaseSearchSynonyms(query):
+    service_url = 'https://www.googleapis.com/freebase/v1/search'
+    params = {
+            'query' : query,
+            'lang' : 'en',
+            'scoring':'freebase',
+            'key': api_key,
+    }
+    url = service_url + '?' + urllib.parse.urlencode(params)
+    response = json.loads(urllib.request.urlopen(url).read().decode())
+    names = []
+    for result in response['result']:
+        if 'name' in result.keys():
+            names += [result['name']]
+    if names == []: return None
+    return names
 
 # Worker function: given valid freebaseMID returns list of relevant triples
 #  - if mid not valid, if result not properly formatted, or there are no triples, return None
@@ -160,3 +174,9 @@ def getFreebaseCompendium(nounChunks, workerNum = 20, iterations=3, redundancies
     mid2triples = utils.poolDownloader(mids, freebaseTopicQuery, workerNum, iterations, redundancies)
 
     return chunk2mids, mid2triples
+
+
+# Master function: Download relevant terms to a given list of terms
+#  - Return 1 dictionary: terms --> list of relevant terms
+def getFreebaseSynonyms(terms, workerNum = 20, iterations=3, redundancies=False):
+    return utils.poolDownloader(terms, freebaseSearchSynonyms, workerNum, iterations, redundancies)

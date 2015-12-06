@@ -3,19 +3,17 @@ import pickle
 import copy
 import time
 import os
+import QAUtils as utils
 
-regentsDataPath = './ScienceQASharedCache/Regents_Train.tsv'
-trainData = './ScienceQASharedCache/training_set.tsv'
-validationData = './ScienceQASharedCache/validation_set.tsv'
+cache = '../Dropbox/ScienceQASharedCache/'
+
+regentsDataPath = cache + 'Regents_Train.tsv'
+trainData = cache + 'training_set.tsv'
+validationData = cache + 'validation_set.tsv'
 
 # second order keywords
-if os.path.isfile('keywords.p'):
-	print('Keywords Found.')
-	local = open('keywords.p', 'rb')
-	localKeywords = pickle.load(local)
-	local.close()
-else:
-	localKeywords = {}
+if os.path.isfile(cache + 'keywords.p'): localKeywords = utils.loadData(cache + 'keywords.p')
+else: localKeywords = {}
 
 class WordGraph:
 	def __init__(self, question, N):
@@ -155,11 +153,7 @@ class Test:
 		self.N = N
 
 		# instantiate mindmaps
-		if os.path.isfile('mindmaps.p'):
-			print('Local Mindmaps found.')
-			local = open('mindmaps.p', 'rb')
-			self.mindmaps = pickle.load(local)
-			local.close()
+		if os.path.isfile(cache + 'mindmaps.p'): utils.loadData(cache + 'mindmaps.p')
 		else:
 			self.mindmaps = {}
 
@@ -257,9 +251,7 @@ class Test:
 				keywords += newKeywords
 
 				localKeywords[questionText] = newKeywords
-				local = open('keywords.p', 'wb')
-				pickle.dump(localKeywords, local)
-				local.close()
+				utils.saveData(localKeywords, cache + 'keywords.p')
 				print('keywords saved.')
 
 		keywords = list(set(keywords))
@@ -287,9 +279,7 @@ class Test:
 			else:
 				wordGraph = WordGraph(questionText, self.N)
 				self.mindmaps[questionText] = wordGraph
-				local = open('mindmaps.p', 'wb')
-				pickle.dump(self.mindmaps, local)
-				local.close()
+				utils.saveData(self.mindmaps, cache + 'mindmaps.p')
 				print('Mindmap saved.')
 
 			keywords = wordGraph.questionKeywords

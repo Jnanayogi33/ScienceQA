@@ -4,14 +4,26 @@ from sklearn import preprocessing
 from random import shuffle
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
+from sklearn.feature_selection import RFECV
+
+# For sanity check: return AUC:
+def getAUC(trueY, scoreY):
+    return roc_auc_score(np.array(trueY), np.array(scoreY))
+
 
 # Run linear kernel SVC and l1 penalty on X and Y, return index of features with non-zero coefficients
 #  - used for feature selection
 #  - l1 penalty norm pushes individual weight values to 0 if they provide little/no information
 def getNonZeroCoefficientFeatures(X, Y, choiceC=1.0):
-    model = LinearSVC(C=choiceC, class_weight='balanced', penalty='l1', dual=False)
-    model.fit(X,Y)
-    return [i for i in range(len(model.coef_.T)) if model.coef_.T[i] != 0.0]
+    # model = LinearSVC(C=choiceC, class_weight='balanced', penalty='l1', dual=False)
+    # model.fit(X,Y)
+    # return [i for i in range(len(model.coef_.T)) if model.coef_.T[i] != 0.0]
+    estimator = LinearSVC(C=choiceC, class_weight='balanced')
+    selector = RFECV(estimator, step=1, cv=5)
+    selector = selector.fit(X, Y)
+    return selector.support_ 
 
 
 # Scale X values to have mean 0 std 1

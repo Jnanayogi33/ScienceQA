@@ -1,14 +1,13 @@
 import searchText as scraper
 import util
+import QAUtils as utils
 from Models import Test
 import pickle, os, time
 
+cache = '../Dropbox/ScienceQASharedCache/'
+
 # Get local copy of freebase
-if os.path.isfile('FB_relations.p'):
-	print('FB Relations Found.')
-	local = open('FB_relations.p', 'rb')
-	freebaseRelations = pickle.load(local)
-	local.close()
+if os.path.isfile(cache + 'FB_relations.p'): freebaseRelations = utils.loadData(cache + 'FB_relations.p')
 else:
 	freebaseRelations = {}
 
@@ -23,9 +22,7 @@ eightGradeExam = Test(start=0, end=8132, dataType='val', N=6)
 keywords = eightGradeExam.getSecondOrderKeywords()
 
 # save second order keywords
-local = open('SecondOrderKeywords.p', 'wb')
-pickle.dump(keywords, local)
-local.close()
+utils.saveData(keywords, cache + 'SecondOrderKeywords.p')
 print('Keywords saved.')
 
 # Filter keywords already in local freebaseRelations
@@ -63,9 +60,7 @@ for word, mids in freebaseChunk2Mids.items():
 end_unpack = time.time()
 
 # Save local store
-local = open('FB_relations.p', 'wb')
-pickle.dump(freebaseRelations, local)
-local.close()
+utils.saveData(freebaseRelations, cache + 'FB_relations.p')
 print('FB relations saved.')
 
 print('Download took {}s'.format(end_download - start_download))

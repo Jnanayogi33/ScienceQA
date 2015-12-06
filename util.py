@@ -7,6 +7,7 @@ import sys, os
 import pickle
 import spacy.en
 import time, string, math
+import QAUtils as utils
 from graphSolver import UniformCostSearch, SearchProblem
 
 ###############################################################
@@ -16,30 +17,19 @@ print('Initializing spacy...')
 nlp = spacy.en.English()
 print('Done!')
 
-# api_key = 'AIzaSyDws9BTSh164jnRU-bCaOPzbycvfLZAvbM'
+cache = '../Dropbox/ScienceQASharedCache/'
+
 search_engine_id = '017856859473145577022:dswlvnrydbq'
 api_key = 'AIzaSyDhCTJt6qh5UkH-t_p8_M2wZAI07NFNV_Y'
 queryResultLimit = 5
 
 # load FB from local store
-if os.path.isfile('FB_relations.p'):
-	print('FB Relations Found.')
-	local = open('FB_relations.p', 'rb')
-	freebaseRelations = pickle.load(local)
-	local.close()
-else:
-	freebaseRelations = {}
+if os.path.isfile(cache + 'FB_relations.p'): freebaseRelations = utils.loadData(cache + 'FB_relations.p')
+else: freebaseRelations = {}
 
 # load WN from local store
-if os.path.isfile('WN_relations.p'):
-	print('WN Relations Found.')
-	local = open('WN_relations.p', 'rb')
-	wnRelations = pickle.load(local)
-	local.close()
-else:
-	wnRelations = {}
-
-
+if os.path.isfile(cache + 'WN_relations.p'): wnRelations = utils.loadData(cache + 'WN_relations.p')
+else: wnRelations = {}
 
 ###############################################################
 # Utility Functions
@@ -65,7 +55,7 @@ def getGoogleSnippets(q):
 
 def getSearchFromFile():
 	'''Opens local copy of search results'''
-	searchResults = pickle.load(open( "searchResults.p", "rb"))
+	searchResults = utils.loadData(cache + 'searchResults.p')
 	searchObject = json.loads(searchResults)
 	snippetDoc = ''
 	items = searchObject['items']
@@ -151,9 +141,7 @@ def getWNRelations(w):
 
 	# save locally
 	wnRelations[w] = neighbors
-	local = open('WN_relations.p', 'wb')
-	pickle.dump(wnRelations, local)
-	local.close()
+	utils.saveData(wnRelations, cache + 'WN_relations.p')	
 	print('WN relations saved:', len(neighbors))
 
 	return neighbors
@@ -277,9 +265,7 @@ def getFBRelations(w):
 
 	# Save relations to memory
 	freebaseRelations[w] = neighbors
-	local = open('FB_relations.p', 'wb')
-	pickle.dump(freebaseRelations, local)
-	local.close()
+	utils.saveData(freebaseRelations, cache + 'FB_relations.p')
 	print('FB relations saved:', len(neighbors))
 
 	return neighbors

@@ -1,3 +1,4 @@
 ScienceQASharedCache/
 keyword graph/
+*.txt
 __pycache__/
