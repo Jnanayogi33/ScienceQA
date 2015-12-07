@@ -17,14 +17,10 @@ def getAUC(trueY, scoreY):
 #  - used for feature selection
 #  - l1 penalty norm pushes individual weight values to 0 if they provide little/no information
 def getNonZeroCoefficientFeatures(X, Y, choiceC=1.0):
-    # model = LinearSVC(C=choiceC, class_weight='balanced', penalty='l1', dual=False)
-    # model.fit(X,Y)
-    # return [i for i in range(len(model.coef_.T)) if model.coef_.T[i] != 0.0]
     estimator = LinearSVC(C=choiceC, class_weight='balanced')
-    selector = RFECV(estimator, step=1, cv=5)
+    selector = RFECV(estimator, step=int(X.shape[1]/10), cv=5)
     selector = selector.fit(X, Y)
-    return selector.support_ 
-
+    return selector.support_
 
 # Scale X values to have mean 0 std 1
 def preprocess(X): return preprocessing.scale(X)
@@ -154,6 +150,7 @@ def returnBestModel(X, Y, candidates, QA_raw, QA_paired, folds=5):
     currMax = 0
     currBest = None
     for key in candidates.keys():
+        print(key)
         currX = X
         if candidates[key][1] == True: currX = preprocess(currX)
         trainScore, testScore = multipleChoiceNFoldsValidation(currX,Y,candidates[key][0],QA_raw, QA_paired, folds, candidates[key][2])

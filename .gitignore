@@ -1,4 +1,7 @@
 ScienceQASharedCache/
 keyword graph/
-*.txt
 __pycache__/
+.ipynb_checkpoints/
+
+*.txt
+*.ipynb

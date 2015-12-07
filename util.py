@@ -1,4 +1,3 @@
-from apiclient.discovery import build
 from nltk.corpus import wordnet as wn
 from spacy import attrs
 import urllib,urllib.request, urllib.error
@@ -34,24 +33,24 @@ else: wnRelations = {}
 ###############################################################
 # Utility Functions
 
-def getGoogleSnippets(q):
-	'''Returns top 20 google snippets for search term q'''
-	print('Searching for google snippets for query:', q)
-	search_term = q
-	service = build('customsearch', 'v1', developerKey=api_key)
-	collection = service.cse()
+# def getGoogleSnippets(q):
+# 	'''Returns top 20 google snippets for search term q'''
+# 	print('Searching for google snippets for query:', q)
+# 	search_term = q
+# 	service = build('customsearch', 'v1', developerKey=api_key)
+# 	collection = service.cse()
 
-	snippetDoc = []
+# 	snippetDoc = []
 
-	for j in range(2):
-		request = collection.list(q=search_term, num=10, start= 1 + 10 * j, cx=search_engine_id)
-		response = request.execute()
-		searchResults = json.dumps(response, sort_keys=True, indent=2)
-		searchObject = json.loads(searchResults)
-		items = searchObject['items']
-		for i in items:
-			snippetDoc.append(i['snippet'])
-	return ' '.join(snippetDoc)
+# 	for j in range(2):
+# 		request = collection.list(q=search_term, num=10, start= 1 + 10 * j, cx=search_engine_id)
+# 		response = request.execute()
+# 		searchResults = json.dumps(response, sort_keys=True, indent=2)
+# 		searchObject = json.loads(searchResults)
+# 		items = searchObject['items']
+# 		for i in items:
+# 			snippetDoc.append(i['snippet'])
+# 	return ' '.join(snippetDoc)
 
 def getSearchFromFile():
 	'''Opens local copy of search results'''
